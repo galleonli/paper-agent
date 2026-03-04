@@ -1,0 +1,87 @@
+# =============================================================================
+# PAPER INTELLIGENCE AGENT — CONFIGURATION
+# Copy to config.yaml and edit. This file is the single source of truth for
+# user-customizable behavior.
+# =============================================================================
+#
+# **********  USER SETTINGS (EDIT HERE)  **********
+#
+# -----------------------------------------------------------------------------
+# Timezone (metadata only; cron uses CRON_TZ for run time)
+# -----------------------------------------------------------------------------
+timezone: "UTC"
+
+# -----------------------------------------------------------------------------
+# Daily limits (catch-up: lookback window + cap per run)
+# -----------------------------------------------------------------------------
+direction:
+  max_papers_per_day: 15
+  lookback_days: 3
+  allow_categories: ["cs.LG", "cs.CL"]
+  deny_categories: []
+  queries: []
+  include_keywords: []
+  exclude_keywords: []
+  exclude_authors: []
+
+# -----------------------------------------------------------------------------
+# Interest model: seeds, keyphrases, negative_keyphrases
+# -----------------------------------------------------------------------------
+interests:
+  seeds:
+    - "https://arxiv.org/abs/2301.12345"
+    - "arXiv:2302.00001"
+  keyphrases:
+    - "contrastive learning"
+    - "protein structure prediction"
+  negative_keyphrases: []
+
+# -----------------------------------------------------------------------------
+# Slack: brief digest only (title + one-liner + why_this_paper + links)
+# -----------------------------------------------------------------------------
+delivery:
+  slack:
+    enabled: false
+    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/PLACEHOLDER"
+    max_message_chars: 4000
+    show_brief_summary: true
+    show_full_summary: false
+  library_dir: "./library"
+  daily_dir: "./daily"
+  state_dir: "./state"
+  logs_dir: "./logs"
+
+# -----------------------------------------------------------------------------
+# Summarization (optional; v0.1 uses abstract snippet if no provider)
+# -----------------------------------------------------------------------------
+summarize:
+  enabled: true
+  provider: "openai"
+  model: "gpt-4o-mini"
+  brief_summary: true
+  brief_one_liner_enabled: true
+
+# -----------------------------------------------------------------------------
+# Export: BibTeX and RIS (EndNote-compatible)
+# -----------------------------------------------------------------------------
+export:
+  formats: ["bibtex", "ris"]
+
+# -----------------------------------------------------------------------------
+# Sources (v0.1: arxiv only; v0.2 placeholder: scholar_alerts inbox)
+# -----------------------------------------------------------------------------
+sources:
+  arxiv:
+    enabled: true
+  scholar_alerts:
+    enabled: false
+    input: "rss"
+    rss_urls: []
+
+# -----------------------------------------------------------------------------
+# ADVANCED (less often changed)
+# -----------------------------------------------------------------------------
+advanced:
+  request_timeout_seconds: 30
+  max_retries: 3
+  max_results_per_query: 100
