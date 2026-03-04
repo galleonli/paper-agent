@@ -1,3 +1,16 @@
+# macOS
+.DS_Store
+
+# Local config (copy from config.example.yaml; may contain secrets)
+config.yaml
+
+# Runtime output and state (user-specific; do not commit)
+library/
+daily/
+state/
+data/
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
