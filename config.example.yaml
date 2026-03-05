@@ -60,6 +60,10 @@ summarize:
   model: "gpt-4o-mini"
   brief_summary: true
   brief_one_liner_enabled: true
+  # Language for LLM-generated content in notes/Slack ("en", "zh", etc.).
+  language: "en"
+  # Whether to generate a research-focused structured summary section in notes.
+  research_summary_enabled: true
 
 # -----------------------------------------------------------------------------
 # Export: BibTeX and RIS (EndNote-compatible)
@@ -68,15 +72,43 @@ export:
   formats: ["bibtex", "ris"]
 
 # -----------------------------------------------------------------------------
-# Sources (v0.1: arxiv only; v0.2 placeholder: scholar_alerts inbox)
+# Sources (v0.1: arxiv; v0.2 placeholder: Google Scholar Alerts "Inbox Mode")
+# We do NOT crawl or scrape Google Scholar pages. When scholar_alerts is
+# implemented, we will only ingest user-provided RSS links or email exports.
 # -----------------------------------------------------------------------------
 sources:
   arxiv:
     enabled: true
   scholar_alerts:
     enabled: false
-    input: "rss"
-    rss_urls: []
+    input: "rss"       # placeholder: "rss" | "email" (user-provided only)
+    rss_urls: []       # user-provided RSS URLs (e.g. from Scholar alert feed)
+
+# -----------------------------------------------------------------------------
+# Feedback (blocked/boosted; used by deterministic policy)
+# -----------------------------------------------------------------------------
+feedback:
+  blocked_phrases: []
+  blocked_authors: []
+  boosted_phrases: []
+
+# -----------------------------------------------------------------------------
+# Selection (agent logic: exploration, topic diversity)
+# -----------------------------------------------------------------------------
+selection:
+  explore_ratio: 0.2
+  topic_cap: 3
+  min_topics: 1
+
+# -----------------------------------------------------------------------------
+# Policy: deterministic (phrase-based) or linucb (bandit: reward + uncertainty + novelty)
+# -----------------------------------------------------------------------------
+policy:
+  type: "deterministic"   # or "linucb"
+  alpha: 0.5              # LinUCB uncertainty scale
+  lambda_ucb: 1.0         # weight for uncertainty in selection score
+  mu_novelty: 0.3         # weight for novelty in selection score
+  ridge: 1.0              # ridge regularization for LinUCB
 
 # -----------------------------------------------------------------------------
 # ADVANCED (less often changed)
