@@ -2,11 +2,11 @@
 
 # 🔥 Paper Intelligence Agent
 
-**Your daily paper digest—tuned to your interests, not keyword soup.**
+**Your Daily Precision feed for arXiv papers—interest-first, explainable, and self-hosted.**
 
-*Discover papers from arXiv, filter by seeds & keyphrases, rank with an explainable policy (deterministic or LinUCB + diversity), and get a short “why this paper” plus an optional research-focused summary for each pick. Slack brief + full local notes + BibTeX/RIS. One YAML config. Self-hosted. No vendor lock-in.*
+*Discover new papers from arXiv, filter by seeds & keyphrases, rank with an explainable policy (deterministic or LinUCB + diversity), and get a short “why this paper” plus optional research-focused notes for each pick. Slack brief + full local notes + BibTeX/RIS. One YAML config. Optional AutoTune for bandit hyperparameters. No vendor lock-in.*
 
-[**Quick start**](#quick-start) · [**Features**](#features) · [**Outputs**](#outputs)
+[**Quick start**](#quick-start) · [**Features**](#features) · [**Configuration**](#configuration) · [**Outputs**](#outputs) · [**Tuning (advanced)**](#tuning-advanced)
 
 <br/>
 
@@ -47,12 +47,13 @@
 
 | | Description |
 |:---|:---|
-| **Interest-first** | Seeds (example papers) + keyphrases; every recommendation includes a short “why this paper.” |
-| **Catch-up safe & idempotent** | Lookback window + persisted state; no missed papers, no duplicate Slack or notes on re-run. Seen state is saved **after** local notes, digest, and exports are written; if Slack push fails, the run logs a warning and does not re-push the same papers on the next run. |
+| **Interest-first** | Seeds (example papers) + keyphrases; every recommendation includes a short **“why_this_paper”** reason. |
+| **Catch-up safe & idempotent** | `direction.lookback_days` + persisted state; no missed papers and no duplicate Slack or notes on re-run. Seen state is saved **after** local notes, digest, and exports are written; if Slack push fails, the run logs a warning and does not re-push the same papers on the next run. |
 | **Config-first** | One `config.yaml`; no code edits for daily use. |
 | **Two-level output** | Slack: brief only (title, one-liner, why, links). Local: full notes in `library/`, daily digest in `daily/`. |
 | **Reference export** | BibTeX and RIS (EndNote-compatible) for Zotero, Mendeley, etc. |
 | **Explainable ranking** | Deterministic phrase-based policy or **LinUCB contextual bandit** with uncertainty + novelty + diversity constraints (`selection.*`, `policy.*`). |
+| **AutoTune (optional)** | Optional contextual bandit meta-controller that learns better `policy.*` hyperparameters from feedback (click/open/star/export/skip/mute) and diversity/novelty metrics. |
 | **Research-focused notes (optional)** | LLM-generated structured summary per paper (subfield, problem, motivation, contributions, method overview), language-controlled via `summarize.language`. |
 | **Self-hosted** | Your config and data stay on your machine. |
 
@@ -98,26 +99,36 @@ Then check outputs (Slack + local files) in [Outputs](#outputs).
 
 ## Configuration
 
-All behavior is driven by `config.yaml` (copy from `config.example.yaml`). Main knobs:
+All behavior is driven by `config.yaml` (copy from `config.example.yaml`).
+
+### User settings (change most often)
 
 | What | Where in config |
 | ---- | ---------------- |
-| What you care about | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
-| Scope & limits | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
-| Feedback (policy) | `feedback.blocked_phrases`, `feedback.blocked_authors`, `feedback.boosted_phrases` |
-| Selection | `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` |
-| Policy (bandit) | `policy.type` (`deterministic` \| `linucb`), `policy.alpha`, `policy.lambda_ucb`, `policy.mu_novelty` |
-| Sources | `sources.arxiv.enabled`; `sources.scholar_alerts` (v0.2 placeholder: **Inbox Mode** — we do **not** crawl Google Scholar; only user-provided RSS or email exports) |
-| Slack brief | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
-| Output dirs | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
-| Export formats | `export.formats` (e.g. `["bibtex", "ris"]`) |
-| Summaries & language | `summarize.enabled`, `summarize.language` (e.g. `"en"`, `"zh"`), `summarize.research_summary_enabled`, `summarize.brief_one_liner_enabled` |
+| **What you care about (Interest Model)** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
+| **Scope & limits (Catch-up window)** | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
+| **Feedback (policy hints)** | `feedback.blocked_phrases`, `feedback.blocked_authors`, `feedback.boosted_phrases` |
+| **Selection (exploration & diversity)** | `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` |
+| **Policy (bandit)** | `policy.type` (`deterministic` \| `linucb`), `policy.alpha`, `policy.lambda_ucb`, `policy.mu_novelty`, `policy.ridge` |
+| **Slack brief** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
+| **Output dirs** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
+| **Export formats** | `export.formats` (e.g. `["bibtex", "ris"]`) |
+| **Summaries & language** | `summarize.enabled`, `summarize.language` (e.g. `"en"`, `"zh"`), `summarize.research_summary_enabled`, `summarize.brief_one_liner_enabled` |
 
-Timezone for *when* the job runs is set by the environment (e.g. `CRON_TZ`), not by config.
+### Advanced settings (optional / less frequent)
+
+| What | Where in config |
+| ---- | ---------------- |
+| **AutoTune (optional meta-controller)** | `autotune.enabled`, `autotune.method` (`"thompson"` \| `"off"`), `autotune.candidates[*].{id,alpha,lambda_ucb,mu_novelty,ridge}` |
+| **AutoTune reward & guardrails** | `autotune.reward.signals.*`, `autotune.reward.diversity.*`, `autotune.guardrails.*` (see `docs/autotune-design.md`) |
+| **Sources** | `sources.arxiv.enabled`; `sources.scholar_alerts` (v0.2 placeholder: Inbox Mode; see Safety) |
+| **Advanced HTTP & limits** | `advanced.request_timeout_seconds`, `advanced.max_retries`, `advanced.max_results_per_query` |
+
+Timezone for *when* the job runs is set by the environment (e.g. `CRON_TZ`), not by config. The `timezone` field in `config.yaml` is metadata only.
 
 **Google Scholar Alerts (v0.2 placeholder):** Config includes `sources.scholar_alerts` with `enabled: false`, `input: "rss"` (or `"email"`), and `rss_urls: []`. We do **not** crawl or scrape Google Scholar. Any future integration will only ingest **user-provided** RSS links or email exports (Inbox Mode).
 
-**Code layout:** `paper_agent/sources/` (arXiv), `core/` (config, state, preferences, topic_stats, models, dates, logging), `features/` (paper→vector for LinUCB), `policy/` (deterministic + LinUCB, `why_this_paper`), `selection/` (constrained top-k, exploration_pick), `output/`, `deliver/`, `export/`, `pipeline.py`. Entrypoint: `python -m paper_agent run` → `run.py` → `pipeline.run()`. State: `state/seen.json`, `state/preferences.json` (LinUCB), `state/topic_stats.json` (novelty).
+**Code layout:** `paper_agent/sources/` (arXiv), `core/` (config, state, preferences, topic_stats, models, dates, logging), `features/` (paper→vector for LinUCB), `policy/` (deterministic + LinUCB, `why_this_paper`), `selection/` (constrained top-k, exploration_pick), `output/`, `deliver/`, `export/`, `autotune/`, `pipeline.py`. Entrypoint: `python -m paper_agent run` → `run.py` → `pipeline.run()`. State: `state/seen.json`, `state/preferences.json` (LinUCB), `state/topic_stats.json` (novelty), `state/autotune.json` (AutoTune).
 
 ---
 
@@ -128,8 +139,8 @@ Timezone for *when* the job runs is set by the environment (e.g. `CRON_TZ`), not
 | **Slack** (optional) | Slack channel | Brief digest message: title, one-liner, “why this paper”, links. | **Yes** — main daily view if Slack enabled. |
 | **Per-paper notes** | `library/` | One file per paper: full note `{id}.md` plus optional `{id}.bib`, `{id}.ris`. | **Yes** — your long-term paper archive. |
 | **Daily digests** | `daily/` | One file per day: `YYYY-MM-DD.md` listing that day’s picks with links to `library/` notes. | **Yes** — browse by day. |
-| **Logs** | `logs/` | `latest.log` with pipeline counters per run; includes `num_topics`, `exploration_picks` (diversity). | Mostly for debugging. |
-| **State** | `state/` | `seen.json` (idempotency), `preferences.json` (LinUCB), `topic_stats.json` (novelty). | No need to edit manually. |
+| **Logs** | `logs/` | `latest.log` with pipeline counters per run; includes `num_topics`, `exploration_picks`, and AutoTune fields when enabled. | Mostly for debugging. |
+| **State** | `state/` | `seen.json` (idempotency), `preferences.json` (LinUCB), `topic_stats.json` (novelty), `autotune.json` (AutoTune state). | No need to edit manually. |
 
 ### Slack example
 
@@ -197,7 +208,73 @@ CRON_TZ=Asia/Shanghai
 
 ---
 
-## Safety & license
+## Troubleshooting
 
-- **arXiv:** Respect terms of use and rate limits; avoid aggressive scraping.
-- **License:** [MIT](LICENSE).
+- **Where are logs?**
+  - `delivery.logs_dir/latest.log` (default: `logs/latest.log`) contains a summary line per run, including:
+    - fetch/filter/selection counts,
+    - `num_topics`, `exploration_picks`,
+    - AutoTune fields when enabled: `autotune_enabled`, `autotune_method`, `autotune_candidate_name`, `autotune_daily_reward`.
+- **I do not see `latest.log` in my IDE**
+  - Make sure you have run the pipeline at least once:
+    ```bash
+    python -m paper_agent run --config config.yaml
+    ```
+  - Check `delivery.logs_dir` in `config.yaml` and look under that directory.
+  - Refresh the IDE file tree; some IDEs hide or delay updating newly created files.
+- **Slack webhook failures**
+  - If the Slack webhook URL is invalid or Slack is temporarily unavailable, the pipeline:
+    - writes all local outputs,
+    - marks papers as seen,
+    - logs a warning (Slack error),
+    - does **not** re-send the same papers in the next run.
+- **Duplicates still appear**
+  - Ensure `delivery.state_dir` is stable across runs and not cleared between executions.
+  - Check `state/seen.json` exists and is writable.
+  - Verify you are not changing `delivery.library_dir` / `delivery.daily_dir` between runs.
+
+---
+
+## Extension guide (short)
+
+- **New source (e.g., another feed)**
+  - Add under `paper_agent/sources/` and wire it into `paper_agent/fetch/` and `pipeline.py` (mirroring how arXiv is handled).
+  - Ensure new sources respect provider terms of use and rate limits.
+- **New policy**
+  - Implement under `paper_agent/policy/` (matching the `Policy` protocol) and expose it via `policy.type` in config.
+  - Keep scoring explainable and ensure `why_this_paper` is populated.
+- **New exporter**
+  - Add under `paper_agent/export/` and call it from `pipeline.py` alongside BibTeX/RIS.
+- **New delivery channel**
+  - Implement under `paper_agent/deliver/` similarly to Slack, and drive it via `delivery.*` config.
+
+For AutoTune extensions (new reward signals or guardrails), see `docs/autotune-design.md`.
+
+---
+
+## Tuning (advanced)
+
+If you want to tune bandit hyperparameters (`policy.*`) or experiment with AutoTune (`autotune.*`),
+see the dedicated guide:
+
+- `TUNING.md`
+
+Most users do **not** need to read it; the defaults are chosen to be stable and reasonable.
+
+---
+
+## Safety & Ethics
+
+- **arXiv usage**
+  - Respect arXiv’s terms of use and rate limits; avoid aggressive scraping or excessive polling.
+  - This project uses the official arXiv API and simple query patterns; please keep your usage modest.
+- **Google Scholar (Inbox Mode only, planned)**
+  - The `sources.scholar_alerts` config is a **placeholder** for Inbox Mode:
+    - `enabled: false` by default.
+    - Only meant to ingest **user-provided** RSS links or email exports.
+    - We do **not** crawl or scrape Google Scholar pages.
+- **Privacy**
+  - All configs, logs, and outputs live on your machine by default.
+  - No external database or hosted service is required.
+- **License**
+  - [MIT](LICENSE).

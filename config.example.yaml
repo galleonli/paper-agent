@@ -104,11 +104,55 @@ selection:
 # Policy: deterministic (phrase-based) or linucb (bandit: reward + uncertainty + novelty)
 # -----------------------------------------------------------------------------
 policy:
-  type: "deterministic"   # or "linucb"
-  alpha: 0.5              # LinUCB uncertainty scale
-  lambda_ucb: 1.0         # weight for uncertainty in selection score
-  mu_novelty: 0.3         # weight for novelty in selection score
-  ridge: 1.0              # ridge regularization for LinUCB
+  type: "linucb"   # or "deterministic"
+  # The following LinUCB hyperparameters have sensible defaults and usually do
+  # not need to be changed. If you really want to tune them, see
+  # docs/agent-logic.md and docs/autotune-design.md and set them explicitly:
+  #
+  # alpha: 0.5              # LinUCB uncertainty scale
+  # lambda_ucb: 1.0         # weight for uncertainty in selection score
+  # mu_novelty: 0.3         # weight for novelty in selection score
+  # ridge: 1.0              # ridge regularization for LinUCB
+
+# -----------------------------------------------------------------------------
+# AutoTune (optional meta-controller for policy hyperparameters)
+# -----------------------------------------------------------------------------
+# Most users can ignore this section. AutoTune is an optional bandit
+# meta-controller for automatically tuning policy.* hyperparameters. It is
+# disabled by default. If you want to experiment, uncomment and edit carefully.
+#
+# autotune:
+#   enabled: false
+#   method: "thompson"      # "thompson" | "off"
+#   schedule:
+#     daily_hour_utc: 23
+#     weekly_day_of_week: "sun"   # "mon".."sun"
+#   candidates:
+#     - id: "baseline"
+#       alpha: 0.5
+#       lambda_ucb: 1.0
+#       mu_novelty: 0.3
+#       ridge: 1.0
+#   reward:
+#     signals:
+#       click: 0.2
+#       open_note: 0.5
+#       star: 1.0
+#       export: 1.5
+#       skip: -0.05
+#       mute: -2.0
+#     diversity:
+#       num_topics: 0.1
+#       exploration_picks: 0.05
+#       avg_novelty: 0.2
+#   guardrails:
+#     max_daily_delta_reward: -5.0
+#     rollback_days: 3
+#     allowed_ranges:
+#       alpha: [0.0, 5.0]
+#       lambda_ucb: [0.0, 5.0]
+#       mu_novelty: [0.0, 5.0]
+#       ridge: [0.01, 100.0]
 
 # -----------------------------------------------------------------------------
 # ADVANCED (less often changed)
