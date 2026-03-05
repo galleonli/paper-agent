@@ -8,9 +8,9 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+from paper_agent.core.models import Paper
+from paper_agent.core.utils import safe_paper_id_for_path
 from paper_agent.filter_papers import RankedPaper
-from paper_agent.models import Paper
-from paper_agent.utils import safe_paper_id_for_path
 
 
 def _brief_summary_for_note(paper: Paper, one_liner: Optional[str] = None) -> str:
@@ -27,6 +27,7 @@ def write_local_note(
     library_dir: str | Path,
     run_date: date,
     brief_one_liner: Optional[str] = None,
+    research_summary: Optional[tuple[str, str]] = None,
 ) -> Path:
     """
     Write one markdown note to library_dir/{arxiv_id}.md.
@@ -42,6 +43,16 @@ def write_local_note(
     authors_str = "; ".join(paper.authors) if paper.authors else "—"
     cats_str = ", ".join(paper.categories) if paper.categories else "—"
     published = paper.updated[:10] if paper.updated and len(paper.updated) >= 10 else (paper.updated or "—")
+
+    research_section = ""
+    if research_summary is not None:
+        heading, body_text = research_summary
+        research_section = f"""
+
+## {heading}
+
+{body_text}
+"""
 
     body = f"""# {paper.title}
 
@@ -62,7 +73,7 @@ def write_local_note(
 
 ## Why this paper
 
-{why}
+{why}{research_section}
 
 ## Key points
 

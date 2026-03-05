@@ -8,9 +8,10 @@ Every recommended paper gets a human-readable why_this_paper (keyphrases and/or 
 from dataclasses import dataclass
 from typing import Optional
 
-from paper_agent.config import Config
-from paper_agent.models import Paper
-from paper_agent.state import normalize_paper_id
+from paper_agent.core.config import Config
+from paper_agent.core.models import Paper
+from paper_agent.core.state import paper_id_in_seeds
+from paper_agent.core.utils import normalize_text, text_matches_any
 
 
 @dataclass
@@ -21,21 +22,6 @@ class RankedPaper:
     why_this_paper: Optional[str] = None
 
 
-def _normalize(s: str) -> str:
-    return s.lower().strip()
-
-
-def _text_matches_any(text: str, phrases: list[str]) -> bool:
-    """True if any phrase appears in text (case-insensitive)."""
-    if not phrases:
-        return False
-    norm_text = _normalize(text)
-    for p in phrases:
-        if p and _normalize(p) in norm_text:
-            return True
-    return False
-
-
 def _author_matches_exclude(paper: Paper, exclude_authors: list[str]) -> bool:
     """True if any excluded author substring matches a paper author (case-insensitive)."""
     if not exclude_authors:
@@ -43,37 +29,49 @@ def _author_matches_exclude(paper: Paper, exclude_authors: list[str]) -> bool:
     for ex in exclude_authors:
         if not ex:
             continue
-        ex_norm = _normalize(ex)
+        ex_norm = normalize_text(ex)
         for a in paper.authors:
-            if ex_norm in _normalize(a):
+            if ex_norm in normalize_text(a):
                 return True
     return False
 
 
-def _paper_id_in_seeds(paper_id: str, seeds: list[str]) -> bool:
-    """True if paper ID (normalized) is in the seeds list (normalized)."""
-    norm_id = normalize_paper_id(paper_id)
-    for s in seeds:
-        if s and normalize_paper_id(s) == norm_id:
-            return True
-    return False
+def count_after_category(
+    papers: list[Paper],
+    allow_categories: list[str],
+    deny_categories: list[str],
+) -> int:
+    """Count papers that pass allow_categories/deny_categories only (for logging)."""
+    allow_cat = set(normalize_text(c) for c in allow_categories if c)
+    deny_cat = set(normalize_text(c) for c in deny_categories if c)
+    if not allow_cat and not deny_cat:
+        return len(papers)
+    n = 0
+    for paper in papers:
+        paper_cats = set(normalize_text(c) for c in paper.categories)
+        if allow_cat and not (paper_cats & allow_cat):
+            continue
+        if deny_cat and (paper_cats & deny_cat):
+            continue
+        n += 1
+    return n
 
 
-def _build_why_this_paper(
+def build_why_this_paper(
     paper: Paper,
     keyphrases: list[str],
     seeds: list[str],
 ) -> str:
     """
     Build human-readable explanation: which keyphrases matched and/or that it is in seeds.
-    Deterministic; no randomness.
+    Deterministic; no randomness. Shared by filter_and_rank and deterministic policy.
     """
     parts = []
-    combined = _normalize(paper.title) + " " + _normalize(paper.summary)
-    matched_kw = [p for p in keyphrases if p and _normalize(p) in combined]
+    combined = normalize_text(paper.title) + " " + normalize_text(paper.summary)
+    matched_kw = [p for p in keyphrases if p and normalize_text(p) in combined]
     if matched_kw:
         parts.append(f"Keyphrase(s) matched: {', '.join(matched_kw)}")
-    if _paper_id_in_seeds(paper.id, seeds):
+    if paper_id_in_seeds(paper.id, seeds):
         parts.append("In your seeds")
     return "; ".join(parts) if parts else "—"
 
@@ -92,41 +90,41 @@ def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
     include_kw = [k for k in direction.include_keywords if k]
     exclude_kw = [k for k in direction.exclude_keywords if k]
     exclude_auth = [k for k in direction.exclude_authors if k]
-    allow_cat = set(_normalize(c) for c in direction.allow_categories if c)
-    deny_cat = set(_normalize(c) for c in direction.deny_categories if c)
+    allow_cat = set(normalize_text(c) for c in direction.allow_categories if c)
+    deny_cat = set(normalize_text(c) for c in direction.deny_categories if c)
 
     ranked: list[RankedPaper] = []
     for paper in papers:
         # Category filter: allow_categories and deny_categories (case-insensitive)
         if allow_cat or deny_cat:
-            paper_cats = set(_normalize(c) for c in paper.categories)
+            paper_cats = set(normalize_text(c) for c in paper.categories)
             if allow_cat and not (paper_cats & allow_cat):
                 continue
             if deny_cat and (paper_cats & deny_cat):
                 continue
 
-        combined = _normalize(paper.title) + " " + _normalize(paper.summary)
-        combined_with_authors = combined + " " + " ".join(_normalize(a) for a in paper.authors)
+        combined = normalize_text(paper.title) + " " + normalize_text(paper.summary)
+        combined_with_authors = combined + " " + " ".join(normalize_text(a) for a in paper.authors)
 
         # Direction: include_keywords (must match at least one if non-empty)
-        if include_kw and not _text_matches_any(combined_with_authors, include_kw):
+        if include_kw and not text_matches_any(combined_with_authors, include_kw):
             continue
-        if _text_matches_any(combined_with_authors, exclude_kw):
+        if text_matches_any(combined_with_authors, exclude_kw):
             continue
         if _author_matches_exclude(paper, exclude_auth):
             continue
 
         # Negative keyphrases: exclude if any match
-        if _text_matches_any(combined_with_authors, neg_phrases):
+        if text_matches_any(combined_with_authors, neg_phrases):
             continue
 
         # Interest gate: when keyphrases non-empty, require keyphrase match OR seed match
-        keyphrase_match = bool(keyphrases) and _text_matches_any(combined, keyphrases)
-        seed_match = _paper_id_in_seeds(paper.id, seeds)
+        keyphrase_match = bool(keyphrases) and text_matches_any(combined, keyphrases)
+        seed_match = paper_id_in_seeds(paper.id, seeds)
         if keyphrases and not keyphrase_match and not seed_match:
             continue
 
-        why = _build_why_this_paper(paper, keyphrases, seeds)
+        why = build_why_this_paper(paper, keyphrases, seeds)
         ranked.append(RankedPaper(paper=paper, why_this_paper=why))
 
     # Rank: keyphrase match first, then seed match, then rest; within tier, newer first

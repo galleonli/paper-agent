@@ -1,6 +1,4 @@
-"""
-Backward compatibility: re-export from sources.arxiv.
-"""
+# Paper sources (arXiv, future: scholar_alerts inbox)
 
 from paper_agent.sources.arxiv import fetch_arxiv
 

@@ -1,4 +1,4 @@
-# Backward compatibility: re-export from export
+# Export formats (BibTeX, RIS)
 
 from paper_agent.export.bibtex_ris import write_bibtex, write_ris
 
