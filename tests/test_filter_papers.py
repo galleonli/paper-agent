@@ -1,7 +1,7 @@
 """Tests for filter and rank (case-insensitive, why_this_paper)."""
 
 from paper_agent.config import Config, InterestsConfig, DirectionConfig
-from paper_agent.filter_papers import filter_and_rank, RankedPaper
+from paper_agent.filter_papers import count_after_category, filter_and_rank, RankedPaper
 from paper_agent.models import Paper
 
 
@@ -95,6 +95,20 @@ def test_ranking_keyphrase_matches_first() -> None:
     assert "seed" in (result[1].why_this_paper or "").lower()
 
 
+def test_count_after_category() -> None:
+    """count_after_category returns count of papers passing allow/deny categories only."""
+    papers = [
+        _paper("1", categories=["cs.LG"]),
+        _paper("2", categories=["cs.AI"]),
+        _paper("3", categories=["cs.Other"]),
+    ]
+    # allow cs.LG, cs.CL; deny cs.AI -> only id 1 passes
+    n = count_after_category(papers, ["cs.LG", "cs.CL"], ["cs.AI"])
+    assert n == 1
+    # no filter -> all pass
+    assert count_after_category(papers, [], []) == 3
+
+
 def test_allow_deny_categories() -> None:
     """allow_categories: paper must have at least one allowed; deny_categories: exclude if any match."""
     config = Config(
@@ -135,3 +149,24 @@ def test_include_keywords_must_match() -> None:
     result = filter_and_rank(papers, config)
     assert len(result) == 1
     assert result[0].paper.id == "2"
+
+
+def test_exclude_keywords_case_insensitive() -> None:
+    """Papers matching exclude_keywords are excluded (case-insensitive, title+abstract+authors)."""
+    config = Config(
+        interests=InterestsConfig(keyphrases=[], negative_keyphrases=[]),
+        direction=DirectionConfig(
+            max_papers_per_day=10,
+            lookback_days=2,
+            allow_categories=[],
+            exclude_keywords=["survey", "tutorial"],
+        ),
+    )
+    papers = [
+        _paper("1", title="A Survey of ML", summary="We review methods."),
+        _paper("2", title="TUTORIAL on Deep Learning", summary="Step-by-step."),
+        _paper("3", title="Novel method", summary="We propose X."),
+    ]
+    result = filter_and_rank(papers, config)
+    assert len(result) == 1
+    assert result[0].paper.id == "3"

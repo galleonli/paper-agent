@@ -87,3 +87,23 @@ def test_config_validation_export_formats() -> None:
     ExportConfig(formats=["BibTeX"])  # normalized to lower
     with pytest.raises(ValueError, match="Unknown export format"):
         ExportConfig(formats=["pdf", "bibtex"])
+
+
+def test_load_config_example_file() -> None:
+    """config.example.yaml in repo root loads and has expected structure."""
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parent.parent / "config.example.yaml"
+    if not example.exists():
+        pytest.skip("config.example.yaml not found (run from repo root)")
+    cfg = load_config(example)
+    assert cfg.direction.max_papers_per_day >= 1
+    assert cfg.direction.lookback_days >= 1
+    assert cfg.delivery.state_dir
+    assert "bibtex" in cfg.export.formats and "ris" in cfg.export.formats
+    assert cfg.sources.arxiv.enabled in (True, False)
+    assert hasattr(cfg, "feedback") and hasattr(cfg.feedback, "blocked_phrases")
+    assert hasattr(cfg, "selection") and hasattr(cfg.selection, "topic_cap")
+    assert 0 <= cfg.selection.explore_ratio <= 1
+    assert cfg.selection.topic_cap >= 1 and cfg.selection.min_topics >= 1
+    assert hasattr(cfg, "policy") and cfg.policy.type in ("deterministic", "linucb")

@@ -11,6 +11,7 @@ from paper_agent.state import (
     mark_seen,
     filter_unseen,
     normalize_paper_id,
+    paper_id_in_seeds,
     state_path,
 )
 
@@ -21,6 +22,14 @@ def test_normalize_paper_id() -> None:
     assert normalize_paper_id("https://arxiv.org/abs/2301.12345") == "2301.12345"
     assert normalize_paper_id("arXiv:2301.12345") == "2301.12345"
     assert normalize_paper_id("  arXiv:2302.00001  ") == "2302.00001"
+
+
+def test_paper_id_in_seeds() -> None:
+    """paper_id_in_seeds matches normalized paper ID against normalized seeds."""
+    assert paper_id_in_seeds("2301.12345", ["2301.12345"]) is True
+    assert paper_id_in_seeds("https://arxiv.org/abs/2301.12345", ["arXiv:2301.12345"]) is True
+    assert paper_id_in_seeds("2301.12345", ["2302.00001"]) is False
+    assert paper_id_in_seeds("2301.12345", []) is False
 
 
 def test_save_and_load_seen(tmp_path: Path) -> None:
