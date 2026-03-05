@@ -28,6 +28,11 @@ from paper_agent.core.topic_stats import (
     update_topic_stats_from_papers,
 )
 from paper_agent.features.encoder import encode_paper
+from paper_agent.autotune import AutoTuneController, TunedPolicyParams
+from paper_agent.autotune.base import AutoTuneContext
+from paper_agent.autotune.reward import compute_reward
+import json
+from typing import Any, Dict, List
 
 
 def run(config_path: str | Path) -> list[RankedPaper]:
@@ -67,6 +72,32 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     # Policy + constrained selection (agent logic)
     papers_for_policy = [r.paper for r in ranked_all]
     context = PolicyContext(config)
+
+    # Optional AutoTune: choose policy parameters before scoring.
+    autotune_configured = bool(getattr(config, "autotune", None) and config.autotune.enabled)
+    autotune_enabled = autotune_configured and config.policy.type == "linucb"
+    autotune_candidate_name = "static"
+    autotune_method = "off"
+    autotune_params: TunedPolicyParams | None = None
+    autotune_daily_reward = 0.0
+
+    run_date = date.today()
+
+    autotune_controller: AutoTuneController | None = None
+    if autotune_enabled:
+        autotune_method = config.autotune.method
+        autotune_controller = AutoTuneController(config, delivery.state_dir)
+        at_context = AutoTuneContext(
+            run_date=run_date,
+        )
+        autotune_params = autotune_controller.choose_config(at_context)
+        autotune_candidate_name = autotune_params.candidate_id
+        # Override policy config for this run only.
+        config.policy.alpha = autotune_params.alpha
+        config.policy.lambda_ucb = autotune_params.lambda_ucb
+        config.policy.mu_novelty = autotune_params.mu_novelty
+        config.policy.ridge = autotune_params.ridge
+
     if config.policy.type == "linucb":
         policy = LinUCBPolicy()
     else:
@@ -101,13 +132,17 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     unseen_ids, seen_cache = filter_unseen(delivery.state_dir, paper_ids)
     if not unseen_ids:
         log.info(
-            "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=0 pushed_count=0 num_topics=%d exploration_picks=%d",
+            "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=0 pushed_count=0 num_topics=%d exploration_picks=%d autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f",
             fetched_total,
             after_category,
             after_filters,
             selected,
             num_topics,
             exploration_picks,
+            autotune_enabled,
+            autotune_method,
+            autotune_candidate_name,
+            autotune_daily_reward,
         )
         return []
 
@@ -136,7 +171,6 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         papers_topics,
     )
 
-    run_date = date.today()
     Path(delivery.library_dir).mkdir(parents=True, exist_ok=True)
     Path(delivery.daily_dir).mkdir(parents=True, exist_ok=True)
 
@@ -173,8 +207,42 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         except Exception as e:
             log.warning("Slack push failed (papers already marked seen): %s", e)
 
+    if autotune_controller and autotune_params:
+        diversity_metrics = {
+            "num_topics": float(num_topics),
+            "exploration_picks": float(exploration_picks),
+        }
+        avg_novelty = float(
+            sum(s.novelty for s in selected_scored) / len(selected_scored)
+        ) if selected_scored else 0.0
+        novelty_metrics = {"avg_novelty": avg_novelty}
+
+        # Feedback events are read from state_dir; if feedback_log.jsonl exists,
+        # it is preferred. Otherwise, fall back to feedback.yaml when present.
+        feedback_events = _load_feedback_events(delivery.state_dir, run_date)
+
+        autotune_daily_reward = compute_reward(
+            feedback_events,
+            diversity_metrics,
+            novelty_metrics,
+            config,
+        )
+
+        at_update_ctx = AutoTuneContext(
+            run_date=run_date,
+            num_papers=new_count,
+            num_topics=num_topics,
+            exploration_picks=exploration_picks,
+            avg_novelty=avg_novelty,
+        )
+        autotune_controller.update(
+            reward=autotune_daily_reward,
+            context=at_update_ctx,
+            chosen_config=autotune_params,
+        )
+
     log.info(
-        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d pushed_count=%d num_topics=%d exploration_picks=%d digest_path=%s",
+        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d pushed_count=%d num_topics=%d exploration_picks=%d digest_path=%s autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f",
         fetched_total,
         after_category,
         after_filters,
@@ -184,5 +252,74 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         num_topics,
         exploration_picks,
         str(digest_path),
+        autotune_enabled,
+        autotune_method,
+        autotune_candidate_name,
+        autotune_daily_reward,
     )
     return ranked_unseen
+
+
+def _load_feedback_events(state_dir: str | Path, run_date: date) -> List[Dict[str, Any]]:
+    """Load feedback events for the given run_date from JSONL or YAML state files.
+
+    Preference order:
+    1) state/feedback_log.jsonl (append-only event log)
+    2) state/feedback.yaml (manual entries)
+    """
+    state_path = Path(state_dir)
+    jsonl_path = state_path / "feedback_log.jsonl"
+    yaml_path = state_path / "feedback.yaml"
+
+    events: List[Dict[str, Any]] = []
+    target_prefix = run_date.isoformat()
+
+    if jsonl_path.exists():
+        try:
+            with open(jsonl_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    ts = str(record.get("timestamp", ""))
+                    if ts.startswith(target_prefix):
+                        events.append(
+                            {
+                                "event_type": record.get("event_type"),
+                                "paper_id": record.get("paper_id"),
+                                "timestamp": ts,
+                            }
+                        )
+        except OSError:
+            # Fall back to YAML if reading JSONL fails.
+            pass
+
+    # Fallback: if no events from JSONL (or file missing / unreadable), try YAML.
+    if not events and yaml_path.exists():
+        try:
+            import yaml
+
+            with open(yaml_path, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except Exception:
+            return events
+
+        raw_events = data.get("events", []) if isinstance(data, dict) else []
+        for record in raw_events:
+            if not isinstance(record, dict):
+                continue
+            ts = str(record.get("timestamp", ""))
+            if ts.startswith(target_prefix):
+                events.append(
+                    {
+                        "event_type": record.get("event_type"),
+                        "paper_id": record.get("paper_id"),
+                        "timestamp": ts,
+                    }
+                )
+
+    return events

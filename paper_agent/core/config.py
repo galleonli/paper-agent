@@ -87,6 +87,90 @@ class AdvancedConfig(BaseModel):
     max_results_per_query: int = Field(default=100, ge=1, le=500)
 
 
+class AutotuneRewardSignalsConfig(BaseModel):
+    """Weights for per-paper feedback signals used by AutoTune."""
+
+    click: float = 0.2
+    open_note: float = 0.5
+    star: float = 1.0
+    export: float = 1.5
+    skip: float = -0.05
+    mute: float = -2.0
+
+
+class AutotuneRewardDiversityConfig(BaseModel):
+    """Weights for diversity and novelty components in AutoTune reward."""
+
+    num_topics: float = 0.1
+    exploration_picks: float = 0.05
+    avg_novelty: float = 0.2
+
+
+class AutotuneRewardConfig(BaseModel):
+    """Reward shaping configuration for AutoTune."""
+
+    signals: AutotuneRewardSignalsConfig = Field(default_factory=AutotuneRewardSignalsConfig)
+    diversity: AutotuneRewardDiversityConfig = Field(default_factory=AutotuneRewardDiversityConfig)
+
+
+class AutotuneGuardrailsConfig(BaseModel):
+    """Guardrails and rollback rules for AutoTune."""
+
+    max_daily_delta_reward: float = -5.0
+    rollback_days: int = Field(default=3, ge=1, le=30)
+    allowed_ranges: dict[str, tuple[float, float]] = Field(
+        default_factory=lambda: {
+            "alpha": (0.0, 5.0),
+            "lambda_ucb": (0.0, 5.0),
+            "mu_novelty": (0.0, 5.0),
+            "ridge": (0.01, 100.0),
+        }
+    )
+
+
+class AutotuneCandidateConfig(BaseModel):
+    """Discrete candidate for AutoTune to choose from."""
+
+    id: str
+    alpha: float
+    lambda_ucb: float
+    mu_novelty: float
+    ridge: float
+
+
+class AutotuneScheduleConfig(BaseModel):
+    """Scheduling configuration for AutoTune updates."""
+
+    daily_hour_utc: int = Field(default=23, ge=0, le=23)
+    weekly_day_of_week: str = Field(
+        default="sun", description="Three-letter lowercase day name: mon..sun"
+    )
+
+    @field_validator("weekly_day_of_week")
+    @classmethod
+    def validate_day(cls, v: str) -> str:
+        allowed = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+        v_norm = v.lower()
+        if v_norm not in allowed:
+            raise ValueError(f"weekly_day_of_week must be one of {sorted(allowed)}")
+        return v_norm
+
+
+class AutotuneConfig(BaseModel):
+    """AutoTune meta-controller configuration."""
+
+    enabled: bool = False
+    method: str = Field(default="thompson", description="'thompson' or 'off'")
+    schedule: AutotuneScheduleConfig = Field(default_factory=AutotuneScheduleConfig)
+    candidates: list[AutotuneCandidateConfig] = Field(default_factory=list)
+    reward: AutotuneRewardConfig = Field(default_factory=AutotuneRewardConfig)
+    guardrails: AutotuneGuardrailsConfig = Field(default_factory=AutotuneGuardrailsConfig)
+    random_seed: int | None = Field(
+        default=None,
+        description="Optional fixed seed for AutoTune randomness (Thompson Sampling).",
+    )
+
+
 class ArxivSourceConfig(BaseModel):
     """arXiv source (v0.1)."""
 
@@ -156,6 +240,7 @@ class Config(BaseModel):
     feedback: FeedbackConfig = Field(default_factory=FeedbackConfig)
     selection: SelectionConfig = Field(default_factory=SelectionConfig)
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
+    autotune: AutotuneConfig = Field(default_factory=AutotuneConfig)
 
 
 def load_config(path: str | Path) -> Config:
