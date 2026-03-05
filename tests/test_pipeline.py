@@ -84,6 +84,22 @@ def test_run_with_arxiv_disabled_returns_list(tmp_path: Path) -> None:
     assert len(result) == 0
 
 
+def test_run_creates_logs_file(tmp_path: Path) -> None:
+    """Pipeline run always creates logs/latest.log with a summary line."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(_minimal_config(tmp_path), encoding="utf-8")
+    result = run(config_path)
+    assert isinstance(result, list)
+    log_path = tmp_path / "logs" / "latest.log"
+    assert log_path.exists()
+    content = log_path.read_text(encoding="utf-8")
+    # Summary line with counters is written even when no new papers
+    assert "fetched_total=" in content
+    assert "after_category=" in content
+    assert "after_filters=" in content
+    assert "new_count=" in content
+
+
 def test_run_returns_ranked_papers_with_why_this_paper(tmp_path: Path) -> None:
     """Pipeline returns list of RankedPaper; when non-empty, items have why_this_paper (policy)."""
     config_path = tmp_path / "config.yaml"
@@ -153,3 +169,84 @@ def test_slack_failure_still_saves_seen_no_repush(tmp_path: Path) -> None:
     ):
         result2 = pipeline_run(config_path)
     assert len(result2) == 0
+
+
+def test_integration_autotune_pipeline_contract(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """When autotune.enabled is toggled, pipeline uses correct policy params and logs candidate/reward."""
+    import logging
+
+    caplog.set_level(logging.INFO)  # noqa: F811
+
+    # Start from minimal config and enable linucb + autotune.
+    base_cfg = _minimal_config(tmp_path)
+    base_cfg = base_cfg.replace('type: "deterministic"', 'type: "linucb"')
+    autotune_block = """
+autotune:
+  enabled: true
+  method: "thompson"
+  random_seed: 123
+  schedule:
+    daily_hour_utc: 23
+    weekly_day_of_week: "sun"
+  candidates:
+    - id: "fast"
+      alpha: 0.1
+      lambda_ucb: 0.2
+      mu_novelty: 0.3
+      ridge: 1.0
+"""
+    config_content = base_cfg + autotune_block
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config_content, encoding="utf-8")
+
+    # Case 1: autotune.enabled=false => static policy and autotune_enabled=False in logs.
+    static_cfg = config_content.replace("enabled: true", "enabled: false")
+    config_path.write_text(static_cfg, encoding="utf-8")
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
+        run(config_path)
+    log_text_static = caplog.text
+    assert "autotune_enabled=False" in log_text_static
+
+    # Case 2: autotune.enabled=true => AutoTuneController is used and candidate name appears.
+    caplog.clear()
+    config_path.write_text(config_content, encoding="utf-8")
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
+        run(config_path)
+    log_text = caplog.text
+    assert "autotune_enabled=True" in log_text
+    assert "autotune_candidate_name=" in log_text
+    assert "autotune_daily_reward=" in log_text
+
+
+def test_autotune_flag_false_when_policy_not_linucb(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Even if autotune.enabled=true, when policy.type!=linucb the logs must show autotune_enabled=False."""
+    import logging
+
+    caplog.set_level(logging.INFO)  # noqa: F811
+
+    base_cfg = _minimal_config(tmp_path)
+    # Keep policy.type deterministic, but configure autotune.enabled=true.
+    autotune_block = """
+autotune:
+  enabled: true
+  method: "thompson"
+  random_seed: 123
+  schedule:
+    daily_hour_utc: 23
+    weekly_day_of_week: "sun"
+  candidates:
+    - id: "fast"
+      alpha: 0.1
+      lambda_ucb: 0.2
+      mu_novelty: 0.3
+      ridge: 1.0
+"""
+    config_content = base_cfg + autotune_block
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config_content, encoding="utf-8")
+
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
+        run(config_path)
+    log_text = caplog.text
+    # AutoTune is configured but not active because policy.type != linucb.
+    assert "autotune_enabled=False" in log_text
