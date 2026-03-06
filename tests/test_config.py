@@ -107,3 +107,86 @@ def test_load_config_example_file() -> None:
     assert 0 <= cfg.selection.explore_ratio <= 1
     assert cfg.selection.topic_cap >= 1 and cfg.selection.min_topics >= 1
     assert hasattr(cfg, "policy") and cfg.policy.type in ("deterministic", "linucb")
+
+
+def test_load_config_supports_scholar_imap_shape(tmp_path: Path) -> None:
+    """Scholar Alerts email+imap config shape is accepted and normalized."""
+    yaml_content = """
+timezone: "UTC"
+interests:
+  seeds: []
+  keyphrases: []
+  negative_keyphrases: []
+direction:
+  max_papers_per_day: 12
+  lookback_days: 7
+  allow_categories: []
+  deny_categories: []
+  queries: []
+  include_keywords: []
+  exclude_keywords: []
+  exclude_authors: []
+delivery:
+  slack:
+    enabled: false
+    webhook_url: ""
+  library_dir: "./library"
+  daily_dir: "./daily"
+  state_dir: "./state"
+  logs_dir: "./logs"
+summarize:
+  enabled: false
+  brief_summary: true
+export:
+  formats: ["bibtex", "ris"]
+sources:
+  arxiv:
+    enabled: true
+  scholar_alerts:
+    enabled: true
+    mode: "email"
+    email:
+      provider: "imap"
+      gmail_label: "scholar-alerts"
+      imap_host: "imap.gmail.com"
+      imap_user: "user@example.com"
+      imap_password_env: "IMAP_PASSWORD"
+      mbox_path: ""
+      eml_dir: ""
+      from_addresses: []
+    max_items_per_run: 200
+    push_to_slack: true
+    ordering: "arrival"
+    light_filter:
+      include_keywords: []
+      exclude_keywords:
+        - "point cloud"
+        - "humanoid"
+        - "manipulation"
+        - "survey"
+      exclude_authors: []
+advanced:
+  request_timeout_seconds: 30
+  max_retries: 3
+  max_results_per_query: 100
+"""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(yaml_content, encoding="utf-8")
+    cfg = load_config(config_path)
+
+    sa = cfg.sources.scholar_alerts
+    assert sa.enabled is True
+    assert sa.mode == "email"
+    assert sa.ordering == "arrival"
+    assert sa.email.provider == "imap"
+    assert sa.email.imap_host == "imap.gmail.com"
+    assert sa.email.imap_user == "user@example.com"
+    assert sa.email.imap_password_env == "IMAP_PASSWORD"
+    assert sa.email.gmail_label == "scholar-alerts"
+    assert sa.email.from_addresses == []
+    assert sa.light_filter.exclude_keywords == [
+        "point cloud",
+        "humanoid",
+        "manipulation",
+        "survey",
+    ]

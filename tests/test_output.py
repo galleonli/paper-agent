@@ -27,7 +27,7 @@ def _ranked(paper_id: str = "2301.12345", title: str = "Test Paper", why: str | 
 def test_write_local_note(tmp_path: Path) -> None:
     """write_local_note creates library_dir/{id}.md with title, summary, why_this_paper."""
     r = _ranked()
-    path = write_local_note(r, tmp_path, date(2024, 1, 15))
+    path = write_local_note(r, tmp_path, date(2024, 1, 15), source="arxiv")
     assert path.exists()
     text = path.read_text(encoding="utf-8")
     assert "Test Paper" in text
@@ -36,12 +36,56 @@ def test_write_local_note(tmp_path: Path) -> None:
 
 
 def test_write_daily_digest(tmp_path: Path) -> None:
-    """write_daily_digest creates daily_dir/YYYY-MM-DD.md with run date and paper list."""
-    ranked_list = [_ranked("1", "First"), _ranked("2", "Second")]
-    path = write_daily_digest(ranked_list, tmp_path, date(2024, 1, 15))
+    """write_daily_digest creates daily_dir/YYYY-MM-DD.md with two sections (Daily Precision + Scholar Inbox)."""
+    discovery = [_ranked("1", "First"), _ranked("2", "Second")]
+    scholar = [_ranked("3", "Third")]
+    path = write_daily_digest(discovery, scholar, tmp_path, date(2024, 1, 15))
     assert path.exists()
     assert path.name == "2024-01-15.md"
     text = path.read_text(encoding="utf-8")
     assert "2024-01-15" in text
+    assert "## Daily Precision" in text
+    assert "## Scholar Inbox" in text
     assert "First" in text
     assert "Second" in text
+    assert "Third" in text
+    # Section order: Daily Precision first, then Scholar Inbox.
+    assert text.index("## Daily Precision") < text.index("## Scholar Inbox")
+    assert "Total papers:" in text or "Daily Precision:" in text or "Scholar Inbox:" in text
+
+
+def test_digest_two_sections_format(tmp_path: Path) -> None:
+    """Digest has exactly two section headers and correct subsection structure."""
+    discovery = [_ranked("a", "Discovery A")]
+    scholar = [_ranked("b", "Scholar B")]
+    path = write_daily_digest(discovery, scholar, tmp_path, date(2025, 1, 1))
+    text = path.read_text(encoding="utf-8")
+    assert text.count("## Daily Precision") == 1
+    assert text.count("## Scholar Inbox") == 1
+    assert "Papers: 1" in text  # under each section
+    assert "### Discovery A" in text
+    assert "### Scholar B" in text
+    assert "../library/" in text
+
+
+def test_write_local_note_scholar_source_and_placeholder(tmp_path: Path) -> None:
+    """Scholar note includes Source: scholar_alerts and placeholder when abstract missing."""
+    r = RankedPaper(
+        paper=Paper(
+            id="scholar-abc123",
+            title="Inbox Paper",
+            summary="",  # no abstract
+            authors=["Author"],
+            categories=[],
+            updated="2025-01-02T00:00:00Z",
+            link_abs="https://example.com/paper",
+            link_pdf=None,
+        ),
+        why_this_paper="From your Scholar Inbox.",
+    )
+    path = write_local_note(r, tmp_path, date(2025, 1, 2), source="scholar_alerts")
+    assert path.exists()
+    text = path.read_text(encoding="utf-8")
+    assert "Source" in text and "scholar_alerts" in text
+    assert "No abstract in alert email" in text
+    assert "Inbox Paper" in text

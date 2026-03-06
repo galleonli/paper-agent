@@ -152,7 +152,10 @@ def test_slack_failure_still_saves_seen_no_repush(tmp_path: Path) -> None:
 
     with (
         patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
-        patch("paper_agent.pipeline.send_slack_brief", side_effect=RuntimeError("Slack failed")),
+        patch(
+            "paper_agent.pipeline.send_slack_brief",
+            side_effect=RuntimeError("Slack failed"),
+        ),
     ):
         result = pipeline_run(config_path)
     assert len(result) == 1
