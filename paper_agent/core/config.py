@@ -40,7 +40,7 @@ class SlackConfig(BaseModel):
 
     enabled: bool = False
     webhook_url: str = Field(default="", description="Set in config or env; never commit real URL")
-    max_message_chars: int = Field(default=4000, ge=100, le=50000)
+    max_message_chars: int = Field(default=10000, ge=100, le=50000)
     show_brief_summary: bool = True
     show_full_summary: bool = False
 
