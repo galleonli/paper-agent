@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Google Scholar Alert - continual learning</title>
+  <updated>2025-01-02T10:00:00Z</updated>
+
+  <entry>
+    <title>Continual Learning with Sparse Experts</title>
+    <id>tag:scholar.google.com,2025-01-02:paper1</id>
+    <updated>2025-01-02T09:30:00Z</updated>
+    <published>2024-12-30T00:00:00Z</published>
+    <author>
+      <name>Alice Smith</name>
+    </author>
+    <link href="https://arxiv.org/abs/2501.00001"/>
+    <summary>We study continual learning with sparse expert routing.</summary>
+    <category>cs.LG</category>
+  </entry>
+
+  <entry>
+    <title>Lifelong Representation Learning in Vision</title>
+    <id>tag:scholar.google.com,2025-01-01:paper2</id>
+    <updated>2025-01-01T08:00:00Z</updated>
+    <published>2024-12-29T00:00:00Z</published>
+    <author>
+      <name>Bob Johnson</name>
+    </author>
+    <link href="https://doi.org/10.1234/vision.2025.0001"/>
+    <summary>This paper explores lifelong learning for visual representations.</summary>
+    <category>cs.CV</category>
+  </entry>
+
+  <entry>
+    <title>Incremental Learning in Robotics</title>
+    <id>tag:scholar.google.com,2024-12-31:paper3</id>
+    <published>2024-12-28T00:00:00Z</published>
+    <author>
+      <name>Carol Lee</name>
+    </author>
+    <link href="https://example.com/robotics/incremental-learning"/>
+    <summary>Robotics applications of incremental learning.</summary>
+    <category>cs.RO</category>
+  </entry>
+</feed>
+

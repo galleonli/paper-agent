@@ -1,0 +1,24 @@
+From: Google Scholar Alerts <scholaralerts-noreply@google.com>
+To: user@example.com
+Subject: New results for continual learning
+Date: Thu, 06 Mar 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/html; charset="UTF-8"
+
+<!doctype html>
+<html>
+  <body>
+    <h3>
+      <a class="gse_alrt_title" href="https://scholar.google.com/scholar_url?url=https%3A%2F%2Farxiv.org%2Fabs%2F2602.00001&hl=en">
+        Continual Learning with Sparse Experts
+      </a>
+    </h3>
+    <div class="gse_alrt_sni">This paper studies continual learning with sparse routing.</div>
+    <h3>
+      <a class="gse_alrt_title" href="https://scholar.google.com/scholar_url?url=https%3A%2F%2Fexample.com%2Fmanipulation-paper&hl=en">
+        Robot manipulation under distribution shift
+      </a>
+    </h3>
+    <div class="gse_alrt_sni">Manipulation benchmark in dynamic scenes.</div>
+  </body>
+</html>
