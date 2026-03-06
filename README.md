@@ -4,7 +4,7 @@
 
 **Your Daily Precision feed for arXiv papers—interest-first, explainable, and self-hosted.**
 
-*Discover new papers from arXiv, filter by seeds & keyphrases, rank with an explainable policy (deterministic or LinUCB + diversity), and get a short “why this paper” plus optional research-focused notes for each pick. Slack brief + full local notes + BibTeX/RIS. One YAML config. Optional AutoTune for bandit hyperparameters. No vendor lock-in.*
+*Discover papers from arXiv (seeds & keyphrases, explainable bandit + diversity) and ingest Google Scholar Alert emails in a separate inbox. Get a short “why this paper,” optional research notes, Slack brief, local notes, and BibTeX/RIS—all from one YAML config. Optional AutoTune. No vendor lock-in.*
 
 [**Quick start**](#quick-start) · [**Features**](#features) · [**Configuration**](#configuration) · [**Outputs**](#outputs) · [**Tuning (advanced)**](#tuning-advanced)
 
@@ -23,258 +23,135 @@
 
 ---
 
-## Who is this for?
+## Key features
 
-- **Individual users / researchers**: want a reproducible, local arXiv digest with minimal setup and a simple YAML config.
-- **Small teams**: share daily digests in Slack while keeping full notes and reference files under versioned directories (`library/`, `daily/`).
-- **Self-hosted deployments**: run as a cron job or in existing automation without external services, GPU, or database dependencies.
-
----
-
-## How it works
-
-<div align="center">
-
-| 1. Configure | 2. Run daily | 3. Get output |
-|:------------:|:------------:|:-------------:|
-| Set `seeds`, `keyphrases`, and (optional) Slack webhook in `config.yaml` | `python -m paper_agent run --config config.yaml` or cron | **Slack:** brief only · **Local:** full notes in `library/`, digest in `daily/`, BibTeX & RIS |
-
-</div>
-
----
-
-## Features
-
-| | Description |
-|:---|:---|
-| **Interest-first** | Seeds (example papers) + keyphrases; every recommendation includes a short **“why_this_paper”** reason. |
-| **Catch-up safe & idempotent** | `direction.lookback_days` + persisted state; no missed papers and no duplicate Slack or notes on re-run. Seen state is saved **after** local notes, digest, and exports are written; if Slack push fails, the run logs a warning and does not re-push the same papers on the next run. |
-| **Config-first** | One `config.yaml`; no code edits for daily use. |
-| **Two-level output** | Slack: brief only (title, one-liner, why, links). Local: full notes in `library/`, daily digest in `daily/`. |
-| **Reference export** | BibTeX and RIS (EndNote-compatible) for Zotero, Mendeley, etc. |
-| **Explainable ranking** | Deterministic phrase-based policy or **LinUCB contextual bandit** with uncertainty + novelty + diversity constraints (`selection.*`, `policy.*`). |
-| **AutoTune (optional)** | Optional contextual bandit meta-controller that learns better `policy.*` hyperparameters from feedback (click/open/star/export/skip/mute) and diversity/novelty metrics. |
-| **Research-focused notes (optional)** | LLM-generated structured summary per paper (subfield, problem, motivation, contributions, method overview), language-controlled via `summarize.language`. |
-| **Self-hosted** | Your config and data stay on your machine. |
+- **Daily Precision (arXiv):** Seeds + keyphrases, explainable bandit (deterministic or LinUCB), exploration/diversity constraints, capped by `max_papers_per_day`.
+- **Scholar Inbox (email):** Ingest Scholar Alert emails (mbox / .eml dir); **not** capped by `max_papers_per_day`; **no** bandit constraints; ordering by arrival (received time) only; light filtering.
+- **Idempotent:** Shared `state/seen.json`; second run over same window → 0 new.
+- **Outputs:** Local notes per paper, daily digest (two sections), optional Slack (two sections), BibTeX/RIS for discovery.
 
 ---
 
 ## Quick start
 
-### Environment setup
-
-- **Requirements:** Python 3.10+
-
-First-time setup:
-
 ```bash
 git clone https://github.com/your-org/daily-paper-agent.git
 cd daily-paper-agent
-
 python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp config.example.yaml config.yaml
-```
-
-Edit `config.yaml`: set `interests.seeds`, `interests.keyphrases`, and (optionally) `delivery.slack.webhook_url`. Paths (`delivery.*`) and limits (`direction.*`) are in the same file.
-
-### Run the agent
-
-Single run:
-
-```bash
+# Edit config.yaml: interests, direction, (optional) Slack and Scholar Inbox
 python -m paper_agent run --config config.yaml
 ```
 
-- First run: prints `Processed N new paper(s).` and writes notes/digest/exports.
-- Second run with the same state: prints `Processed 0 new paper(s).` (no duplicates).
-
-Then check outputs (Slack + local files) in [Outputs](#outputs).
-
-**Idempotency (no duplicates):** Papers are marked as “seen” in `state_dir/seen.json` **after** local notes, daily digest, and BibTeX/RIS exports are written. Even if Slack delivery fails, the run only logs a warning; the next run will **not** re-send or re-write the same papers.
+First run writes notes, digest, and exports; second run with same state prints no new papers.
 
 ---
 
-## Configuration
+## Configuration (user settings first)
 
-All behavior is driven by `config.yaml` (copy from `config.example.yaml`).
+Copy `config.example.yaml` to `config.yaml`. Main knobs:
 
-### User settings (change most often)
+| What | Where |
+|------|--------|
+| **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
+| **Discovery scope** | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
+| **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
+| **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
+| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir`), `email.mbox_path` / `email.eml_dir`, `max_items_per_run`, `light_filter` |
+| **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` |
+| **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
 
-| What | Where in config |
-| ---- | ---------------- |
-| **What you care about (Interest Model)** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
-| **Scope & limits (Catch-up window)** | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
-| **Feedback (policy hints)** | `feedback.blocked_phrases`, `feedback.blocked_authors`, `feedback.boosted_phrases` |
-| **Selection (exploration & diversity)** | `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` |
-| **Policy (bandit)** | `policy.type` (`deterministic` \| `linucb`), `policy.alpha`, `policy.lambda_ucb`, `policy.mu_novelty`, `policy.ridge` |
-| **Slack brief** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
-| **Output dirs** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
-| **Export formats** | `export.formats` (e.g. `["bibtex", "ris"]`) |
-| **Summaries & language** | `summarize.enabled`, `summarize.language` (e.g. `"en"`, `"zh"`), `summarize.research_summary_enabled`, `summarize.brief_one_liner_enabled` |
-
-### Advanced settings (optional / less frequent)
-
-| What | Where in config |
-| ---- | ---------------- |
-| **AutoTune (optional meta-controller)** | `autotune.enabled`, `autotune.method` (`"thompson"` \| `"off"`), `autotune.candidates[*].{id,alpha,lambda_ucb,mu_novelty,ridge}` |
-| **AutoTune reward & guardrails** | `autotune.reward.signals.*`, `autotune.reward.diversity.*`, `autotune.guardrails.*` (see `docs/autotune-design.md`) |
-| **Sources** | `sources.arxiv.enabled`; `sources.scholar_alerts` (v0.2 placeholder: Inbox Mode; see Safety) |
-| **Advanced HTTP & limits** | `advanced.request_timeout_seconds`, `advanced.max_retries`, `advanced.max_results_per_query` |
-
-Timezone for *when* the job runs is set by the environment (e.g. `CRON_TZ`), not by config. The `timezone` field in `config.yaml` is metadata only.
-
-**Google Scholar Alerts (v0.2 placeholder):** Config includes `sources.scholar_alerts` with `enabled: false`, `input: "rss"` (or `"email"`), and `rss_urls: []`. We do **not** crawl or scrape Google Scholar. Any future integration will only ingest **user-provided** RSS links or email exports (Inbox Mode).
-
-**Code layout:** `paper_agent/sources/` (arXiv), `core/` (config, state, preferences, topic_stats, models, dates, logging), `features/` (paper→vector for LinUCB), `policy/` (deterministic + LinUCB, `why_this_paper`), `selection/` (constrained top-k, exploration_pick), `output/`, `deliver/`, `export/`, `autotune/`, `pipeline.py`. Entrypoint: `python -m paper_agent run` → `run.py` → `pipeline.run()`. State: `state/seen.json`, `state/preferences.json` (LinUCB), `state/topic_stats.json` (novelty), `state/autotune.json` (AutoTune).
+Timezone for *when* the job runs: set `CRON_TZ` in the environment; `timezone` in config is metadata only.
 
 ---
 
-## Outputs
+## Output artifacts
 
-| Target | Where | Contents | For users? |
-|--------|-------|----------|-----------|
-| **Slack** (optional) | Slack channel | Brief digest message: title, one-liner, “why this paper”, links. | **Yes** — main daily view if Slack enabled. |
-| **Per-paper notes** | `library/` | One file per paper: full note `{id}.md` plus optional `{id}.bib`, `{id}.ris`. | **Yes** — your long-term paper archive. |
-| **Daily digests** | `daily/` | One file per day: `YYYY-MM-DD.md` listing that day’s picks with links to `library/` notes. | **Yes** — browse by day. |
-| **Logs** | `logs/` | `latest.log` with pipeline counters per run; includes `num_topics`, `exploration_picks`, and AutoTune fields when enabled. | Mostly for debugging. |
-| **State** | `state/` | `seen.json` (idempotency), `preferences.json` (LinUCB), `topic_stats.json` (novelty), `autotune.json` (AutoTune state). | No need to edit manually. |
+| Artifact | Path | Contents |
+|----------|------|----------|
+| **Notes** | `library/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/summary, why-this-paper, key points. Scholar items: placeholder if no abstract. |
+| **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped), **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/{id}.md`. |
+| **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
+| **Exports** | `library/{id}.bib`, `library/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
 
-### Slack example
+Example digest snippet:
 
-```text
-📄 Contrastive Representation Learning for Protein Folding
-One-liner: Extends AlphaFold with contrastive pretraining on MSA; +2% on CAMEO.
-Why this paper: Keyphrase(s) matched: contrastive learning; In your seeds.
-🔗 arXiv: https://arxiv.org/abs/2401.xxxxx  |  Note: 2401.xxxxx.md
+```markdown
+# Daily digest — 2025-01-02
+Total papers: 5 (Daily Precision: 2, Scholar Inbox: 3)
+---
+## Daily Precision
+Papers: 2
+### First paper
+- **Why**: Keyphrase matched.
+- **Link**: https://arxiv.org/abs/2501.00001
+- **Local note**: [2501.00001.md](../library/2501.00001.md)
+---
+## Scholar Inbox
+Papers: 3
+### Scholar item title
+- **Link**: https://...
+- **Local note**: [scholar....md](../library/...)
 ```
-
-### Local note example
-
-`library/<id>.md`: title, arXiv ID, published, authors, link, categories, abstract, summary, “Why this paper,” an optional **research-focused summary** section (if `summarize.research_summary_enabled` and an LLM provider are configured), and a Key points section (for your notes). Same paper also gets `<id>.bib` and `<id>.ris` when export is enabled.
 
 ---
 
-## How to run and verify (v0.1)
+## Sources
 
-**Run once:**
+### Daily Precision (arXiv)
 
-```bash
-cp config.example.yaml config.yaml
-# Edit config.yaml: set interests, (optional) delivery.slack.webhook_url, paths
-python -m paper_agent run --config config.yaml
-```
+- Fetched via arXiv API; filtered by categories/keywords/authors; scored by policy (deterministic or LinUCB); constrained selection (exploration, topic cap, min topics).
+- **Capped by `direction.max_papers_per_day`.**
 
-**Expected:** Console prints `Processed N new paper(s).` (N ≥ 0). Check `delivery.library_dir` for `{arxiv_id}.md`, `{arxiv_id}.bib`, `{arxiv_id}.ris`; `delivery.daily_dir` for `YYYY-MM-DD.md`; `delivery.logs_dir/latest.log` for counts.
+### Scholar Inbox (email alerts)
 
-**Verify idempotency (no duplicate pushes):**
-
-```bash
-python -m paper_agent run --config config.yaml
-python -m paper_agent run --config config.yaml  # must print `Processed 0 new paper(s).`
-```
-
-Second run must print `Processed 0 new paper(s).` and `logs/latest.log` must show `new_count=0 pushed_count=0`.
-
-**Run tests:**
-
-```bash
-pip install -r requirements-dev.txt
-pytest tests/ -v
-```
-
-**Verification checklist:**
-
-| Check | Expected |
-|-------|----------|
-| Second run same day | `Processed 0 new paper(s).`, `new_count=0` in `latest.log` |
-| Local outputs | `library/{id}.md`, `library/{id}.bib`, `library/{id}.ris`, `daily/YYYY-MM-DD.md` |
-| Each note has | Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Summary, Why this paper, optional research-focused summary (if enabled) |
-| Slack (if enabled) | Brief message: title, one-liner (if `summarize.brief_one_liner_enabled`), why_this_paper, arXiv + note links; length ≤ `max_message_chars` |
-| Filters | Papers outside `allow_categories` or matching `deny_categories` / `exclude_keywords` / `exclude_authors` are excluded |
+- Ingest from **Google Scholar Alert emails** only (mbox file or directory of .eml files). No RSS; no crawling of Google Scholar.
+- **Not** capped by `max_papers_per_day`; bounded only by `sources.scholar_alerts.max_items_per_run`.
+- **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`include_keywords`, `exclude_keywords`, `exclude_authors`).
+- Setup: create alerts at Google Scholar (email delivery), save messages to mbox or .eml dir, set `email.provider` and `email.mbox_path` or `email.eml_dir`. Optional: `email.from_addresses` (e.g. `["scholaralerts-noreply@google.com"]`).
 
 ---
 
 ## Scheduling
 
-Run daily via cron (or your scheduler). Example: 8:00 AM in your timezone:
+Run daily via cron (or your scheduler). Set timezone with `CRON_TZ`:
 
 ```bash
-CRON_TZ=Asia/Shanghai
-0 8 * * * cd /path/to/daily-paper-agent && . .venv/bin/activate && python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
+CRON_TZ=Europe/Berlin
+0 8 * * * cd /path/to/daily-paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
 ```
 
 ---
 
 ## Troubleshooting
 
-- **Where are logs?**
-  - `delivery.logs_dir/latest.log` (default: `logs/latest.log`) contains a summary line per run, including:
-    - fetch/filter/selection counts,
-    - `num_topics`, `exploration_picks`,
-    - AutoTune fields when enabled: `autotune_enabled`, `autotune_method`, `autotune_candidate_name`, `autotune_daily_reward`.
-- **I do not see `latest.log` in my IDE**
-  - Make sure you have run the pipeline at least once:
-    ```bash
-    python -m paper_agent run --config config.yaml
-    ```
-  - Check `delivery.logs_dir` in `config.yaml` and look under that directory.
-  - Refresh the IDE file tree; some IDEs hide or delay updating newly created files.
-- **Slack webhook failures**
-  - If the Slack webhook URL is invalid or Slack is temporarily unavailable, the pipeline:
-    - writes all local outputs,
-    - marks papers as seen,
-    - logs a warning (Slack error),
-    - does **not** re-send the same papers in the next run.
-- **Duplicates still appear**
-  - Ensure `delivery.state_dir` is stable across runs and not cleared between executions.
-  - Check `state/seen.json` exists and is writable.
-  - Verify you are not changing `delivery.library_dir` / `delivery.daily_dir` between runs.
+- **Where are logs?**  
+  `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`.
+
+- **Second run still shows new papers?**  
+  Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Same `library_dir` and `daily_dir` across runs.
+
+- **Slack not sending?**  
+  Check `delivery.slack.webhook_url`; if Slack fails, the run still writes local outputs and marks papers seen (no re-send next run).
+
+- **No Scholar items?**  
+  Confirm `sources.scholar_alerts.enabled: true`, `email.provider` and path (`mbox_path` or `eml_dir`) set, and messages are within `lookback_days`. Check `scholar_provider` in `latest.log`.
 
 ---
 
-## Extension guide (short)
+## Safety & ethics
 
-- **New source (e.g., another feed)**
-  - Add under `paper_agent/sources/` and wire it into `paper_agent/fetch/` and `pipeline.py` (mirroring how arXiv is handled).
-  - Ensure new sources respect provider terms of use and rate limits.
-- **New policy**
-  - Implement under `paper_agent/policy/` (matching the `Policy` protocol) and expose it via `policy.type` in config.
-  - Keep scoring explainable and ensure `why_this_paper` is populated.
-- **New exporter**
-  - Add under `paper_agent/export/` and call it from `pipeline.py` alongside BibTeX/RIS.
-- **New delivery channel**
-  - Implement under `paper_agent/deliver/` similarly to Slack, and drive it via `delivery.*` config.
+- **arXiv:** Use the official API only; respect terms and rate limits.
+- **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (mbox / .eml directory, or IMAP when implemented) is ingested.
+- **Privacy:** Config, state, and outputs stay on your machine; no required external DB or hosted service.
 
-For AutoTune extensions (new reward signals or guardrails), see `docs/autotune-design.md`.
+**License:** MIT (`LICENSE`).
 
 ---
 
-## Tuning (advanced)
+## Advanced
 
-If you want to tune bandit hyperparameters (`policy.*`) or experiment with AutoTune (`autotune.*`),
-see the dedicated guide:
-
-- `TUNING.md`
-
-Most users do **not** need to read it; the defaults are chosen to be stable and reasonable.
-
----
-
-## Safety & Ethics
-
-- **arXiv usage**
-  - Respect arXiv’s terms of use and rate limits; avoid aggressive scraping or excessive polling.
-  - This project uses the official arXiv API and simple query patterns; please keep your usage modest.
-- **Google Scholar (Inbox Mode only, planned)**
-  - The `sources.scholar_alerts` config is a **placeholder** for Inbox Mode:
-    - `enabled: false` by default.
-    - Only meant to ingest **user-provided** RSS links or email exports.
-    - We do **not** crawl or scrape Google Scholar pages.
-- **Privacy**
-  - All configs, logs, and outputs live on your machine by default.
-  - No external database or hosted service is required.
-- **License**
-  - [MIT](LICENSE).
+- **Tuning (bandit / AutoTune):** See `TUNING.md`, `docs/agent-logic.md`, `docs/autotune-design.md`. Defaults are stable for most users.
+- **Verification (invariants):** See `docs/VERIFICATION.md` for documented invariants and code references.
