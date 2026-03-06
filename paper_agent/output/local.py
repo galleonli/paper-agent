@@ -28,6 +28,7 @@ def write_local_note(
     run_date: date,
     brief_one_liner: Optional[str] = None,
     research_summary: Optional[tuple[str, str]] = None,
+    source: str | None = None,
 ) -> Path:
     """
     Write one markdown note to library_dir/{arxiv_id}.md.
@@ -42,7 +43,12 @@ def write_local_note(
     summary_text = _brief_summary_for_note(paper, brief_one_liner)
     authors_str = "; ".join(paper.authors) if paper.authors else "—"
     cats_str = ", ".join(paper.categories) if paper.categories else "—"
-    published = paper.updated[:10] if paper.updated and len(paper.updated) >= 10 else (paper.updated or "—")
+    published = (
+        paper.updated[:10]
+        if paper.updated and len(paper.updated) >= 10
+        else (paper.updated or "—")
+    )
+    source_str = source or "arxiv"
 
     research_section = ""
     if research_summary is not None:
@@ -54,18 +60,21 @@ def write_local_note(
 {body_text}
 """
 
+    abstract_body = paper.summary or ("No abstract in alert email." if source == "scholar_alerts" else "—")
+
     body = f"""# {paper.title}
 
 - **Title**: {paper.title}
-- **arXiv ID**: {paper.id}
+- **ID**: {paper.id}
 - **Published**: {published}
 - **Authors**: {authors_str}
 - **Link**: {paper.link_abs}
 - **Categories**: {cats_str}
+- **Source**: {source_str}
 
 ## Abstract
 
-{paper.summary or "—"}
+{abstract_body}
 
 ## Summary
 
@@ -85,35 +94,62 @@ def write_local_note(
 
 
 def write_daily_digest(
-    ranked_list: list[RankedPaper],
+    discovery: list[RankedPaper],
+    scholar_inbox: list[RankedPaper],
     daily_dir: str | Path,
     run_date: date,
 ) -> Path:
     """
     Write daily digest to daily_dir/YYYY-MM-DD.md (single file per day).
-    Lists selected papers with arXiv link and a relative link to the local note.
+    Sections:
+    - Daily Precision: discovery feed (capped by max_papers_per_day).
+    - Scholar Inbox: Scholar Alerts items (uncapped or max_items_per_run capped).
     """
     Path(daily_dir).mkdir(parents=True, exist_ok=True)
     path = Path(daily_dir) / f"{run_date.isoformat()}.md"
 
-    lines = [
+    total = len(discovery) + len(scholar_inbox)
+    lines: list[str] = [
         f"# Daily digest — {run_date.isoformat()}",
         "",
-        f"Papers: {len(ranked_list)}",
+        f"Total papers: {total} (Daily Precision: {len(discovery)}, Scholar Inbox: {len(scholar_inbox)})",
         "",
         "---",
         "",
+        "## Daily Precision",
+        "",
+        f"Papers: {len(discovery)}",
+        "",
     ]
-    for r in ranked_list:
+
+    for r in discovery:
         p = r.paper
         note_name = safe_paper_id_for_path(p.id)
         note_label = f"{note_name}.md"
         note_href = f"../library/{note_name}.md"
         why = r.why_this_paper or "—"
-        lines.append(f"## {p.title}")
+        lines.append(f"### {p.title}")
         lines.append("")
         lines.append(f"- **Why**: {why}")
-        lines.append(f"- **arXiv**: {p.link_abs}")
+        lines.append(f"- **Link**: {p.link_abs}")
+        lines.append(f"- **Local note**: [{note_label}]({note_href})")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("## Scholar Inbox")
+    lines.append("")
+    lines.append(f"Papers: {len(scholar_inbox)}")
+    lines.append("")
+
+    for r in scholar_inbox:
+        p = r.paper
+        note_name = safe_paper_id_for_path(p.id)
+        note_label = f"{note_name}.md"
+        note_href = f"../library/{note_name}.md"
+        lines.append(f"### {p.title}")
+        lines.append("")
+        lines.append(f"- **Link**: {p.link_abs}")
         lines.append(f"- **Local note**: [{note_label}]({note_href})")
         lines.append("")
 

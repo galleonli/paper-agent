@@ -1,6 +1,11 @@
 """
 Load and validate config from YAML. Fail fast with clear errors.
-Schema aligned with config.example.yaml.
+
+Schema and default values are aligned with config.example.yaml:
+- direction: max_papers_per_day=15, lookback_days=3
+- policy.type: "linucb"
+- sources.scholar_alerts: mode=email, email.provider (mbox/eml_dir/gmail/imap), light_filter, ordering=arrival only.
+- Scholar Inbox never counts toward max_papers_per_day and never participates in exploration/diversity (hardcoded).
 """
 
 from pathlib import Path
@@ -20,8 +25,8 @@ class InterestsConfig(BaseModel):
 class DirectionConfig(BaseModel):
     """Direction constraints: categories, queries, keywords, limits."""
 
-    max_papers_per_day: int = Field(ge=1, le=500, description="Cap papers per run")
-    lookback_days: int = Field(ge=1, le=31, description="Days back to consider for catch-up")
+    max_papers_per_day: int = Field(default=15, ge=1, le=500, description="Cap papers per run")
+    lookback_days: int = Field(default=3, ge=1, le=31, description="Days back to consider for catch-up")
     allow_categories: list[str] = Field(default_factory=list, description="arXiv categories to include")
     deny_categories: list[str] = Field(default_factory=list, description="Categories to exclude")
     queries: list[str] = Field(default_factory=list)
@@ -177,16 +182,90 @@ class ArxivSourceConfig(BaseModel):
     enabled: bool = True
 
 
+class ScholarAlertsLightFilterConfig(BaseModel):
+    """Light, source-local filters for Scholar Inbox items."""
+
+    include_keywords: list[str] = Field(default_factory=list)
+    exclude_keywords: list[str] = Field(default_factory=list)
+    exclude_authors: list[str] = Field(default_factory=list)
+
+
+class ScholarAlertsEmailConfig(BaseModel):
+    """Email ingestion: mbox, eml_dir, gmail, or imap. No RSS."""
+
+    provider: str = Field(
+        default="mbox",
+        description="One of: mbox, eml_dir, gmail, imap.",
+    )
+    gmail_label: str = Field(
+        default="scholar-alerts",
+        description="Mailbox/label to select for Gmail IMAP; typically a Gmail label such as 'scholar-alerts'.",
+    )
+    imap_host: str = Field(default="", description="IMAP host (e.g. imap.gmail.com) when provider=imap.")
+    imap_user: str = Field(default="", description="IMAP user/email when provider=imap.")
+    imap_password_env: str = Field(
+        default="IMAP_PASSWORD",
+        description="Env var name for IMAP password (never put password in config).",
+    )
+    mbox_path: str = Field(default="", description="Path to exported .mbox when provider=mbox.")
+    eml_dir: str = Field(default="", description="Directory of .eml files when provider=eml_dir.")
+    from_addresses: list[str] = Field(
+        default_factory=lambda: ["scholaralerts-noreply@google.com"],
+        description="Optional filter: only process messages from these addresses; empty = no filter.",
+    )
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        allowed = {"mbox", "eml_dir", "gmail", "imap"}
+        v_norm = v.lower().strip()
+        if v_norm not in allowed:
+            raise ValueError(f"sources.scholar_alerts.email.provider must be one of {sorted(allowed)}")
+        return v_norm
+
+
 class ScholarAlertsSourceConfig(BaseModel):
-    """Google Scholar Alerts Inbox Mode (v0.2 placeholder). We do NOT crawl Google Scholar; only user-provided RSS URLs or email exports."""
+    """Google Scholar Alerts Inbox: email only (no RSS; no crawling). Never counts toward max_papers_per_day; no bandit constraints."""
 
     enabled: bool = False
-    input: str = Field(default="rss", description="Placeholder: 'rss' or 'email' (user-provided only)")
-    rss_urls: list[str] = Field(default_factory=list, description="User-provided RSS URLs (e.g. from Scholar alert feed)")
+    mode: str = Field(default="email", description="Only 'email' is implemented for Scholar Alerts.")
+    email: ScholarAlertsEmailConfig = Field(
+        default_factory=ScholarAlertsEmailConfig,
+        description="Email source settings: provider, paths, IMAP, from_addresses.",
+    )
+    max_items_per_run: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Cap on Scholar Inbox items processed per run.",
+    )
+    push_to_slack: bool = True
+    light_filter: ScholarAlertsLightFilterConfig = Field(
+        default_factory=ScholarAlertsLightFilterConfig,
+        description="Light filters applied only to Scholar Inbox items.",
+    )
+    ordering: str = Field(
+        default="arrival",
+        description="Only 'arrival' (email received time) for email inbox semantics.",
+    )
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v.lower() != "email":
+            raise ValueError("sources.scholar_alerts.mode must be 'email' (only email is implemented).")
+        return "email"
+
+    @field_validator("ordering")
+    @classmethod
+    def validate_ordering(cls, v: str) -> str:
+        if v.lower() != "arrival":
+            raise ValueError("sources.scholar_alerts.ordering must be 'arrival' for email inbox.")
+        return "arrival"
 
 
 class SourcesConfig(BaseModel):
-    """Sources: arxiv + scholar_alerts (v0.2 inbox placeholder; no Scholar crawling)."""
+    """Sources: arxiv + scholar_alerts (Scholar Inbox via email only; no crawling)."""
 
     arxiv: ArxivSourceConfig = Field(default_factory=ArxivSourceConfig)
     scholar_alerts: ScholarAlertsSourceConfig = Field(default_factory=ScholarAlertsSourceConfig)
@@ -211,7 +290,7 @@ class SelectionConfig(BaseModel):
 class PolicyConfig(BaseModel):
     """Policy: deterministic or LinUCB; UCB/novelty weights for bandit."""
 
-    type: str = Field(default="deterministic", description="Policy: 'deterministic' or 'linucb'")
+    type: str = Field(default="linucb", description="Policy: 'deterministic' or 'linucb'")
     alpha: float = Field(default=0.5, ge=0.0, le=5.0, description="LinUCB uncertainty scale")
     lambda_ucb: float = Field(default=1.0, ge=0.0, le=5.0, description="Weight for uncertainty in selection score")
     mu_novelty: float = Field(default=0.3, ge=0.0, le=5.0, description="Weight for novelty in selection score")
