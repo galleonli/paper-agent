@@ -43,7 +43,7 @@ delivery:
   slack:
     enabled: false
     webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/PLACEHOLDER"
-    max_message_chars: 4000
+    max_message_chars: 10000
     show_brief_summary: true
     show_full_summary: false
   library_dir: "./library"
@@ -72,17 +72,33 @@ export:
   formats: ["bibtex", "ris"]
 
 # -----------------------------------------------------------------------------
-# Sources (v0.1: arxiv; v0.2 placeholder: Google Scholar Alerts "Inbox Mode")
-# We do NOT crawl or scrape Google Scholar pages. When scholar_alerts is
-# implemented, we will only ingest user-provided RSS links or email exports.
+# Sources: arXiv (discovery) + Scholar Inbox (email only; no RSS, no crawling)
 # -----------------------------------------------------------------------------
 sources:
   arxiv:
     enabled: true
+  # Scholar Inbox: Google Scholar Alerts via email only. Does NOT consume max_papers_per_day;
+  # does NOT use bandit/exploration/diversity constraints. Ordering: arrival (email received) only.
   scholar_alerts:
     enabled: false
-    input: "rss"       # placeholder: "rss" | "email" (user-provided only)
-    rss_urls: []       # user-provided RSS URLs (e.g. from Scholar alert feed)
+    mode: "email"                 # only email is implemented for Scholar Alerts
+    email:
+      provider: "imap"           # mbox | eml_dir | gmail | imap
+      imap_host: "imap.gmail.com"
+      imap_user: "your_scholar_inbox@gmail.com"
+      imap_password_env: "IMAP_PASSWORD"   # env var name for password
+      gmail_label: "scholar-alerts"  # mailbox/label to read from for Gmail IMAP
+      mbox_path: ""               # path to exported .mbox (when provider=mbox)
+      eml_dir: ""                # directory of .eml files (when provider=eml_dir)
+      from_addresses: ["scholaralerts-noreply@google.com"]  # optional filter; can be empty []
+    max_items_per_run: 200
+    push_to_slack: true
+    ordering: "arrival"          # only arrival for email inbox semantics
+    light_filter:
+      include_keywords: []
+      exclude_keywords: []
+      exclude_authors: []
+    # NOTE: do NOT add count_toward_daily_limit or participate_in_constraints.
 
 # -----------------------------------------------------------------------------
 # Feedback (blocked/boosted; used by deterministic policy)
