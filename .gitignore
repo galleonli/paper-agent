@@ -4,6 +4,9 @@
 # Local config (copy from config.example.yaml; may contain secrets)
 config.yaml
 
+# Google Takeout exports (personal data: mail, blocked addresses, etc.; never commit)
+Takeout/
+
 # Runtime output and state (user-specific; do not commit)
 library/
 daily/
