@@ -6,7 +6,7 @@
 
 *Discover papers from arXiv (seeds & keyphrases, explainable bandit + diversity) and ingest Google Scholar Alert emails in a separate inbox. Get a short “why this paper,” optional research notes, Slack brief, local notes, and BibTeX/RIS—all from one YAML config. Optional AutoTune. No vendor lock-in.*
 
-[**Quick start**](#quick-start) · [**Features**](#features) · [**Configuration**](#configuration) · [**Outputs**](#outputs) · [**Tuning (advanced)**](#tuning-advanced)
+[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
 
 <br/>
 
@@ -14,9 +14,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![arXiv](https://img.shields.io/badge/arXiv-API-orange.svg)](https://arxiv.org/help/api)
 [![YAML](https://img.shields.io/badge/config-YAML-red.svg)](config.example.yaml)
-[![Self-hosted](https://img.shields.io/badge/self--hosted-✓-green.svg)](#features)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-✓-green.svg)](#key-features)
 [![Slack](https://img.shields.io/badge/Slack-optional-4A154B?logo=slack)](https://slack.com/)
-[![BibTeX / RIS](https://img.shields.io/badge/export-BibTeX%20%7C%20RIS-00599C.svg)](#outputs)
+[![BibTeX / RIS](https://img.shields.io/badge/export-BibTeX%20%7C%20RIS-00599C.svg)](#output-artifacts)
 [![GPU](https://img.shields.io/badge/GPU-not%20required-brightgreen.svg)](#quick-start)
 
 </div>
@@ -56,7 +56,7 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | What | Where |
 |------|--------|
 | **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
-| **Discovery scope** | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
+| **Discovery scope** | `direction.allow_categories`, `direction.deny_categories`, `direction.queries`, `direction.max_papers_per_day`, `direction.lookback_days`, `direction.include_keywords`, `direction.exclude_keywords`, `direction.exclude_authors` |
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
 | **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap`), `email.mbox_path` / `email.eml_dir` or IMAP settings, `max_items_per_run`, `light_filter`. For Gmail IMAP setup, see [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md). |
@@ -137,7 +137,7 @@ CRON_TZ=Europe/Berlin
   Check `delivery.slack.webhook_url`; if Slack fails, the run still writes local outputs and marks papers seen (no re-send next run).
 
 - **No Scholar items?**  
-  Confirm `sources.scholar_alerts.enabled: true`, `email.provider` and path (`mbox_path` or `eml_dir`) set, and messages are within `lookback_days`. Check `scholar_provider` in `latest.log`.
+  Confirm `sources.scholar_alerts.enabled: true` and `email.provider` set. For mbox/eml: set `mbox_path` or `eml_dir` and ensure messages are within `lookback_days`. For IMAP: set `imap_host`, `imap_user`, `gmail_label`, and `IMAP_PASSWORD` env var. Check `scholar_provider` in `latest.log`.
 
 ---
 
@@ -147,11 +147,8 @@ CRON_TZ=Europe/Berlin
 - **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (mbox, .eml directory, or Gmail IMAP) is ingested.
 - **Privacy:** Config, state, and outputs stay on your machine; no required external DB or hosted service.
 
-**License:** MIT (`LICENSE`).
-
 ---
 
-## Advanced
+## License
 
-- **Tuning (bandit / AutoTune):** See `TUNING.md`, `docs/agent-logic.md`, `docs/autotune-design.md`. Defaults are stable for most users.
-- **Verification (invariants):** See `docs/VERIFICATION.md` for documented invariants and code references.
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). See [LICENSE](LICENSE) for the full text.
