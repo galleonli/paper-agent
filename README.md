@@ -26,7 +26,7 @@
 ## Key features
 
 - **Daily Precision (arXiv):** Seeds + keyphrases, explainable bandit (deterministic or LinUCB), exploration/diversity constraints, capped by `max_papers_per_day`.
-- **Scholar Inbox (email):** Ingest Scholar Alert emails (mbox / .eml dir); **not** capped by `max_papers_per_day`; **no** bandit constraints; ordering by arrival (received time) only; light filtering.
+- **Scholar Inbox (email):** Ingest Scholar Alert emails (mbox, .eml dir, or Gmail IMAP); **not** capped by `max_papers_per_day`; **no** bandit constraints; ordering by arrival (received time) only; light filtering.
 - **Idempotent:** Shared `state/seen.json`; second run over same window → 0 new.
 - **Outputs:** Local notes per paper, daily digest (two sections), optional Slack (two sections), BibTeX/RIS for discovery.
 
@@ -59,7 +59,7 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | **Discovery scope** | `direction.allow_categories`, `direction.max_papers_per_day`, `direction.lookback_days` |
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
-| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir`), `email.mbox_path` / `email.eml_dir`, `max_items_per_run`, `light_filter` |
+| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap`), `email.mbox_path` / `email.eml_dir` or IMAP settings, `max_items_per_run`, `light_filter`. For Gmail IMAP setup, see [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md). |
 | **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` |
 | **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
 
@@ -107,10 +107,10 @@ Papers: 3
 
 ### Scholar Inbox (email alerts)
 
-- Ingest from **Google Scholar Alert emails** only (mbox file or directory of .eml files). No RSS; no crawling of Google Scholar.
+- Ingest from **Google Scholar Alert emails** only (mbox file, directory of .eml files, or Gmail IMAP). No RSS; no crawling of Google Scholar.
 - **Not** capped by `max_papers_per_day`; bounded only by `sources.scholar_alerts.max_items_per_run`.
 - **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`include_keywords`, `exclude_keywords`, `exclude_authors`).
-- Setup: create alerts at Google Scholar (email delivery), save messages to mbox or .eml dir, set `email.provider` and `email.mbox_path` or `email.eml_dir`. Optional: `email.from_addresses` (e.g. `["scholaralerts-noreply@google.com"]`).
+- Setup: create alerts at Google Scholar (email delivery). For mbox/eml: save messages to file or dir, set `email.provider` and `email.mbox_path` or `email.eml_dir`. For Gmail IMAP, see [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md). Optional: `email.from_addresses` (e.g. `["scholaralerts-noreply@google.com"]`).
 
 ---
 
@@ -144,7 +144,7 @@ CRON_TZ=Europe/Berlin
 ## Safety & ethics
 
 - **arXiv:** Use the official API only; respect terms and rate limits.
-- **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (mbox / .eml directory, or IMAP when implemented) is ingested.
+- **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (mbox, .eml directory, or Gmail IMAP) is ingested.
 - **Privacy:** Config, state, and outputs stay on your machine; no required external DB or hosted service.
 
 **License:** MIT (`LICENSE`).
