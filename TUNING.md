@@ -4,6 +4,9 @@ This guide is for **advanced users** who want to tune bandit / agent hyperparame
 Most users can ignore this file and only edit `interests.*`, `direction.*`, `selection.*`, and `delivery.*`
 in `config.yaml`.
 
+Scope note: this guide is for **Daily Precision (arXiv discovery)** only.
+Scholar Inbox (`sources.scholar_alerts.*`) does not use `policy.*`, `selection.*`, or `autotune.*`.
+
 For the full agent logic and AutoTune design, see:
 
 - `docs/agent-logic.md`
@@ -110,7 +113,7 @@ In `config.example.yaml` it is commented out and looks like:
 #### 3.1 When to consider AutoTune
 
 - You have run the agent for **a while** and:
-  - you log feedback events (click/open/star/export/skip/mute) into `state/feedback_log.jsonl` or `feedback.yaml`,
+  - you log feedback events (click/open/star/export/skip/mute) into `state/feedback_log.jsonl` or `state/feedback.yaml`,
   - you want the system to automatically search for a better balance of exploration / novelty.
 
 If you are not logging feedback yet, **leave `autotune.enabled=false`**.
@@ -124,6 +127,11 @@ If you are not logging feedback yet, **leave `autotune.enabled=false`**.
    - `method: "thompson"`
    - A small set of candidates (e.g. 2–3) that differ in `alpha`, `lambda_ucb`, `mu_novelty`.
 4. Ensure feedback events are written daily; see `docs/autotune-design.md` for the event schema.
+
+AutoTune is active only when **both** are true:
+
+- `autotune.enabled: true`
+- `policy.type: "linucb"`
 
 AutoTune will:
 

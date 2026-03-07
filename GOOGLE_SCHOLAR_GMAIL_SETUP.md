@@ -1,6 +1,6 @@
-# Google Scholar Alerts + Gmail IMAP Setup
+# Google Scholar Inbox via Gmail IMAP
 
-**Purpose:** Google Scholar Alerts are delivered by **email only** (no RSS). This tutorial explains how to configure the **Scholar Inbox** to ingest those alerts directly from Gmail via IMAP—no manual export of mbox or .eml files required.
+**Purpose:** Google Scholar Alerts are delivered by **email only** (no official RSS support). This guide explains how to configure the **Scholar Inbox** to ingest those alerts directly from Gmail via IMAP, without manually exporting `mbox` or `.eml` files.
 
 ---
 
@@ -9,7 +9,7 @@
 1. **Use a dedicated personal Gmail account** (or your main account) for Scholar Alerts.
 2. **Create Google Scholar alerts** at [scholar.google.com](https://scholar.google.com) and set delivery to that Gmail address.
 3. **Enable 2-Step Verification** on the Gmail account (required for App Passwords).
-4. **Generate an App Password** in your Google Account: Security → 2-Step Verification → App passwords. Create one for "Mail" (or "Other").
+4. **Generate an App Password** in your Google Account: Security → 2-Step Verification → App passwords. Create one for your paper-agent workflow.
 5. **Export the App Password** as an environment variable:
 
    ```bash
@@ -53,14 +53,16 @@ sources:
 |-------|-------------|
 | `enabled` | Set to `true` to enable Scholar Inbox. |
 | `mode` | Must be `"email"` (only email is supported). |
-| `email.provider` | Use `"imap"` for Gmail IMAP. |
+| `email.provider` | Use `"imap"` for Gmail IMAP (`"gmail"` is also accepted as an alias). |
 | `email.imap_host` | `imap.gmail.com` for Gmail. |
 | `email.imap_user` | Your Gmail address. |
 | `email.imap_password_env` | Name of the environment variable holding the App Password (e.g. `IMAP_PASSWORD`). |
 | `email.gmail_label` | Gmail label to read from (e.g. `scholar-alerts`). If the label does not exist or select fails, the agent falls back to `INBOX`. Create the label in Gmail and apply it to Scholar Alert emails for best results. |
 | `max_items_per_run` | Cap on Scholar items processed per run (default 200). |
-| `ordering` | Only `"arrival"` (email received time, descending). |
+| `ordering` | Recommended: `"arrival"` (email received time, descending). Scholar Inbox is designed as an inbox feed rather than a publication-time ranking feed. |
 | `light_filter` | `include_keywords`, `exclude_keywords`, `exclude_authors`—applied only to Scholar Inbox items. |
+
+`from_addresses` is optional. Leave it empty at first, then tighten it after confirming the actual sender address of your Scholar Alert emails.
 
 ---
 
@@ -75,8 +77,18 @@ sources:
 
 ## 4. Local verification checklist
 
-1. `export IMAP_PASSWORD='your-app-password'`
-2. Run the pipeline: `python -m paper_agent run --config config.yaml`
+1. Export the app password:
+
+   ```bash
+   export IMAP_PASSWORD='your-app-password'
+   ```
+
+2. Run the pipeline:
+
+   ```bash
+   python -m paper_agent run --config config.yaml
+   ```
+
 3. Check:
    - `daily/YYYY-MM-DD.md` contains a **Scholar Inbox** section with items
    - `logs/latest.log` shows `scholar_provider=imap` and `scholar_new=N` (N > 0 if you have new alerts)
@@ -94,6 +106,7 @@ sources:
 | **Org/school Gmail blocks app passwords** | Some Google Workspace accounts disable App Passwords. Use a personal Gmail or `mbox`/`eml_dir` export instead. |
 | **No Scholar alert emails in the mailbox yet** | Create alerts at scholar.google.com and wait for at least one delivery. Check that emails arrive in the configured label or INBOX. |
 | **Label exists but is not used** | The implementation uses `gmail_label` when configured. If the label select fails (e.g. label name differs), Gmail IMAP falls back to `INBOX`. Ensure the label name matches exactly (e.g. `scholar-alerts`). |
+| **IMAP login works but no papers are extracted** | Inspect one raw Scholar Alert email and confirm the parser supports its current HTML/text structure. Different email formats may require parser updates. |
 
 ---
 
