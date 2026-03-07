@@ -4,7 +4,7 @@
 
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
-*Discover relevant arXiv papers with interest-based filtering and clear "why this paper" explanations.
+*Discover relevant arXiv papers with an interest-aware, explainable selection process, not just raw keyword matching.
 Keep Google Scholar Alert emails in a separate inbox, then export local notes, Slack digests, and BibTeX/RIS artifacts.*
 
 [**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Google Scholar setup**](#google-scholar-setup) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
@@ -25,7 +25,7 @@ Keep Google Scholar Alert emails in a separate inbox, then export local notes, S
 
 ## Key features
 
-- **Daily Precision (arXiv):** Discover relevant arXiv papers with interest-based filtering, explainable ranking, and optional exploration/diversity controls.
+- **Daily Precision (arXiv):** Discover relevant arXiv papers with explainable interest signals, policy-based ranking, and optional exploration/diversity controls, rather than simple keyword-only matching.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
 - **Workflow-friendly outputs:** Generate local notes, daily digests, optional Slack summaries, and BibTeX/RIS exports.
@@ -96,7 +96,7 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | What | Where |
 |------|--------|
 | **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
-| **Discovery scope** | `direction.allow_categories`, `direction.deny_categories`, `direction.queries`, `direction.max_papers_per_day`, `direction.lookback_days`, `direction.include_keywords`, `direction.exclude_keywords`, `direction.exclude_authors` |
+| **Direction (scope)** | `direction.lookback_days` applies to both discovery and Scholar Inbox (arrival window for Scholar); `direction.max_papers_per_day` and `direction.allow_categories` / `direction.deny_categories` / `direction.queries` / `direction.include_keywords` / `direction.exclude_keywords` / `direction.exclude_authors` apply to discovery only |
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
 | **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap` \| `gmail`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
