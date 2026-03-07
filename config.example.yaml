@@ -14,6 +14,10 @@ timezone: "UTC"
 # -----------------------------------------------------------------------------
 # Daily limits (catch-up: lookback window + cap per run)
 # -----------------------------------------------------------------------------
+# Scope of `direction`:
+# - lookback_days: global catch-up window for both discovery and Scholar Inbox.
+# - max_papers_per_day: discovery only (Scholar Inbox uses sources.scholar_alerts.max_items_per_run).
+# - allow/deny/queries/include/exclude rules below: discovery feed only.
 direction:
   max_papers_per_day: 15
   lookback_days: 3
@@ -45,7 +49,6 @@ delivery:
     webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/PLACEHOLDER"
     max_message_chars: 10000
     show_brief_summary: true
-    show_full_summary: false
   library_dir: "./library"
   daily_dir: "./daily"
   state_dir: "./state"
