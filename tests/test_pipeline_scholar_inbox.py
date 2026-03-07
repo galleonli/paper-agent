@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from paper_agent.core.models import Paper
+from paper_agent.core.utils import safe_paper_id_for_path
 from paper_agent.pipeline import run as pipeline_run
 from paper_agent.filter_papers import RankedPaper
 from paper_agent.selection import select_topk as real_select_topk
@@ -253,4 +254,55 @@ def test_seen_merge_preserves_scholar_ids_after_pipeline_save(tmp_path: Path) ->
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=discovery_papers):
         second = pipeline_run(config_path)
     assert second == []
+
+
+def test_exports_are_discovery_only_not_scholar(tmp_path: Path) -> None:
+    """
+    Export invariant:
+    - discovery papers produce .bib/.ris,
+    - scholar papers do not produce exports.
+    """
+    config_path = _config_with_scholar(tmp_path)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    discovery_papers = [
+        Paper(
+            id="disc-export-1",
+            title="Discovery Export 1",
+            summary="Abstract",
+            authors=["Alice"],
+            categories=["cs.LG"],
+            updated=now_iso,
+            link_abs="https://arxiv.org/abs/disc-export-1",
+            link_pdf=None,
+        )
+    ]
+    scholar_papers = [
+        Paper(
+            id="scholar:arxiv:2501.00001",
+            title="Scholar Export Check",
+            summary="",
+            authors=["Bob"],
+            categories=[],
+            updated=now_iso,
+            link_abs="https://arxiv.org/abs/2501.00001",
+            link_pdf=None,
+        )
+    ]
+
+    with (
+        patch("paper_agent.pipeline.fetch_arxiv", return_value=discovery_papers),
+        patch("paper_agent.pipeline.scholar_alerts_source.fetch", return_value=scholar_papers),
+    ):
+        result = pipeline_run(config_path)
+
+    assert len(result) == 2
+    library = tmp_path / "library"
+    discovery_name = safe_paper_id_for_path(discovery_papers[0].id)
+    scholar_name = safe_paper_id_for_path(scholar_papers[0].id)
+
+    assert (library / f"{discovery_name}.bib").exists()
+    assert (library / f"{discovery_name}.ris").exists()
+    assert not (library / f"{scholar_name}.bib").exists()
+    assert not (library / f"{scholar_name}.ris").exists()
 
