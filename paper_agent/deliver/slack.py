@@ -109,7 +109,13 @@ def _build_slack_message(
     delivery = config.delivery
     slack_cfg = delivery.slack
     max_chars = slack_cfg.max_message_chars
-    show_brief = slack_cfg.show_brief_summary and config.summarize.brief_one_liner_enabled
+    # Backward-compatible gate for Slack one-liner display.
+    # Keep semantics stable: one-liner is controlled by Slack display switch
+    # plus brief_one_liner_enabled, without introducing new hard gates.
+    show_brief = (
+        slack_cfg.show_brief_summary
+        and config.summarize.brief_one_liner_enabled
+    )
 
     sections: list[str] = []
     sections.append(
