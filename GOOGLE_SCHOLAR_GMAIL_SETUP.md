@@ -53,7 +53,7 @@ sources:
 |-------|-------------|
 | `enabled` | Set to `true` to enable Scholar Inbox. |
 | `mode` | Must be `"email"` (only email is supported). |
-| `email.provider` | Use `"imap"` for Gmail IMAP (`"gmail"` is also accepted as an alias). |
+| `email.provider` | Use `"imap"` for Gmail IMAP. |
 | `email.imap_host` | `imap.gmail.com` for Gmail. |
 | `email.imap_user` | Your Gmail address. |
 | `email.imap_password_env` | Name of the environment variable holding the App Password (e.g. `IMAP_PASSWORD`). |
@@ -71,7 +71,7 @@ sources:
 - **Scholar Inbox does NOT count toward `max_papers_per_day`.** The discovery feed (arXiv) is capped separately; Scholar items are bounded only by `max_items_per_run`.
 - **Scholar Inbox does NOT participate in exploration/diversity constraints.** No bandit scoring, topic caps, or min-topics; it is a separate feed.
 - **Scholar Inbox is ordered by arrival time** (email received time, descending).
-- **Scholar Inbox uses only light filtering** (`include_keywords`, `exclude_keywords`, `exclude_authors`).
+- **Scholar Inbox uses only light filtering** (`sources.scholar_alerts.light_filter.include_keywords`, `sources.scholar_alerts.light_filter.exclude_keywords`, `sources.scholar_alerts.light_filter.exclude_authors`).
 
 ---
 

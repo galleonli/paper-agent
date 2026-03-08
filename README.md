@@ -25,7 +25,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, Sl
 
 ## Key features
 
-- **Daily Precision (arXiv):** Explainable interest signals, policy-based ranking, and optional exploration/diversity controls instead of simple keyword-only matching.
+- **Daily Precision (arXiv):** Interest-aware ranking with explainable signals, plus optional exploration/diversity controls.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
 - **Workflow-friendly outputs:** Generate local notes, daily digests, optional Slack summaries, and BibTeX/RIS exports.
@@ -52,6 +52,8 @@ Edit `config.yaml` at minimum:
 - optional `sources.scholar_alerts.*`
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
+
+OpenAI summarization is optional. If you do not set `OPENAI_API_KEY`, the pipeline still runs and falls back to abstract/snippet-based notes.
 
 ### Run daily (automatic)
 
@@ -81,7 +83,7 @@ sources:
   scholar_alerts:
     enabled: true
     email:
-      provider: imap # mbox | eml_dir | imap (or gmail alias)
+      provider: imap # mbox | eml_dir | imap
 ```
 
 Next steps by provider:
@@ -111,7 +113,7 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
 | **Summarization** | `summarize.enabled`, `summarize.provider`, `summarize.model`, `summarize.language`, `summarize.brief_one_liner_enabled`, `summarize.research_summary_enabled`; optional advanced prompt override at `prompts.research_summary_template`; for OpenAI, set `OPENAI_API_KEY` in the environment rather than storing it in `config.yaml` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
-| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap` \| `gmail`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
+| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
 | **Scholar email source** | `sources.scholar_alerts.email.mbox_path`, `sources.scholar_alerts.email.eml_dir`, or IMAP keys `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, `sources.scholar_alerts.email.imap_password_env`, `sources.scholar_alerts.email.gmail_label` |
 | **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics`; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
 | **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
@@ -143,7 +145,7 @@ If you want to customize the research-summary prompt, leave the built-in default
 
 | Artifact | Path | Contents |
 |----------|------|----------|
-| **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/summary, why-this-paper, key points. Discovery notes may include optional LLM-based `Research-focused summary`; Scholar notes stay light and may contain placeholders. |
+| **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/snippet summary, why-this-paper, and key points. Discovery notes may also include an optional LLM-based `Research-focused summary`; Scholar notes stay light and may contain placeholders. |
 | **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`. |
 | **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
 | **Exports** | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
@@ -219,9 +221,9 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 ### Scholar Inbox
 
 - **No Scholar items?**  
-  - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, or `imap` (or `gmail`).  
+  - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, or `imap`.  
   - **mbox/eml_dir:** Set `sources.scholar_alerts.email.mbox_path` or `sources.scholar_alerts.email.eml_dir`; ensure messages exist and are within `direction.lookback_days`.  
-  - **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; put the password in the environment (e.g. `IMAP_PASSWORD`). If you use `sources.scholar_alerts.email.gmail_label`, the implementation uses it and falls back to `INBOX` if the label cannot be selected.  
+  - **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; put the password in the environment (e.g. `IMAP_PASSWORD`). If `sources.scholar_alerts.email.gmail_label` is configured and supported by the current implementation, the agent attempts to read from that label; otherwise it reads from `INBOX`.  
   - Check `logs/latest.log` for `scholar_provider` and `scholar_new` to confirm the source and count.
 
 - **IMAP login works but no papers are extracted?**  
@@ -229,8 +231,8 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 ### Summarization (optional)
 
-- **Research summary missing or "OPENAI_API_KEY is not set"?**  
-  The research-focused summary is optional. If `summarize.enabled` is true and you want LLM summaries, set `OPENAI_API_KEY` in your environment before running. If you do not set it, the pipeline still runs and writes notes with abstract/snippet summary only; the research-summary section is omitted.
+- **Research summary missing or "OPENAI_API_KEY is not set"?**
+  The research-focused summary is optional. If `summarize.enabled` is true and you want LLM summaries, set `OPENAI_API_KEY` in your environment before running. If you do not set it, the pipeline still runs and writes notes with abstract/snippet summary only; the research-summary section is omitted. You can verify the key is visible to the process with `echo $OPENAI_API_KEY`.
 
 ### Cron / scheduling
 
