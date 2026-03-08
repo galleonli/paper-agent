@@ -68,6 +68,12 @@ class SummarizeConfig(BaseModel):
     research_summary_enabled: bool = True
 
 
+class PromptsConfig(BaseModel):
+    """Optional prompt overrides for advanced users."""
+
+    research_summary_template: str = ""
+
+
 class ExportConfig(BaseModel):
     """Reference export formats (BibTeX, RIS, EndNote-compatible)."""
 
@@ -305,13 +311,14 @@ class PolicyConfig(BaseModel):
 
 
 class Config(BaseModel):
-    """Root config; single source of truth for user-customizable behavior."""
+    """Root config; single source of truth for user-customizable behavior.
+    All dates (paths, digest, run date) use system local time; no timezone config."""
 
-    timezone: str = "UTC"
     interests: InterestsConfig = Field(default_factory=InterestsConfig)
     direction: DirectionConfig = Field(default_factory=DirectionConfig)
     delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
+    prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     advanced: AdvancedConfig = Field(default_factory=AdvancedConfig)

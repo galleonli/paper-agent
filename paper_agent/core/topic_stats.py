@@ -1,11 +1,13 @@
 """
 Topic/phrase exposure stats for novelty: state_dir/topic_stats.json.
 Rarity of phrases/topics over recent exposures (e.g. last 30 days) -> novelty bonus.
+Timestamps use system local time.
 """
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
+
+from paper_agent.core.dates import get_now
 
 TOPIC_STATS_FILENAME = "topic_stats.json"
 
@@ -51,7 +53,7 @@ def save_topic_stats(
     data = {
         "phrase_counts": phrase_counts,
         "topic_counts": topic_counts,
-        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "last_updated": get_now().isoformat(),
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)

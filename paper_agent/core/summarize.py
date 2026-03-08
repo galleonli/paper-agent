@@ -16,13 +16,58 @@ as "no extra summary available".
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional
 
 import requests
 
+logger = logging.getLogger(__name__)
+_openai_key_warned: bool = False
+
 from paper_agent.core.config import Config
 from paper_agent.core.models import Paper
+
+DEFAULT_RESEARCH_SUMMARY_TEMPLATE = """
+You are a research assistant for machine learning papers.
+Read the following paper metadata and produce a concise, structured summary
+for a researcher. Answer strictly in {language_name}.
+
+Paper metadata:
+- Title: {paper_title}
+- Abstract: {paper_summary}
+- Authors: {paper_authors}
+- Categories: {paper_categories}
+- arXiv ID: {paper_id}
+- arXiv URL: {paper_link_abs}
+- Matched keyphrases (user interests): {keyphrases}
+- Direction include_keywords: {include_kw}
+- Existing why_this_paper (selection rationale): {why_text}
+
+Please output the summary in plain text with the following numbered sections:
+
+1. Subfield and problem definition
+- State the specific research subfield this paper belongs to (e.g., class-incremental continual learning, multi-task representation learning, etc.).
+- Give a 1-2 sentence precise definition of the main problem being addressed (what setting, what constraints).
+
+2. Motivation
+- List 1-3 concrete limitations of existing work that the paper highlights.
+- Explain what property or metric the paper aims to improve (e.g., stability-plasticity trade-off, sample efficiency, inference cost).
+
+3. What the paper claims to solve
+- Summarize 2-4 main contributions, each as "problem -> idea" if possible.
+- Clarify whether contributions are about data, model architecture, training strategy, inference strategy, or evaluation protocol.
+
+4. Method overview (high level)
+- Describe the core method as 3-6 ordered steps (input -> processing modules -> output).
+- Highlight the 1-2 design choices that most directly address the motivation (e.g., a specific loss, memory mechanism, routing/gating, etc.).
+
+5. Relevance for the user
+- In 1-2 sentences, explain why this paper could be useful for someone interested in the user's keyphrases and queries (e.g., continual learning with routing/gating, mixture-of-experts, etc.).
+
+If the metadata is insufficient to answer a specific bullet reliably, explicitly say
+"Information insufficient to judge" for that bullet instead of guessing.
+""".strip()
 
 
 def _detect_language_label(lang: str) -> tuple[str, str]:
@@ -49,49 +94,40 @@ def _build_research_prompt(paper: Paper, why: str | None, config: Config) -> str
     keyphrases = ", ".join(config.interests.keyphrases) or "N/A"
     include_kw = ", ".join(config.direction.include_keywords) or "N/A"
     categories = ", ".join(paper.categories) or "N/A"
-
     why_text = why or "—"
+    template = (getattr(config, "prompts", None) and config.prompts.research_summary_template) or ""
+    template = template.strip() or DEFAULT_RESEARCH_SUMMARY_TEMPLATE
 
-    return f"""
-You are a research assistant for machine learning papers.
-Read the following paper metadata and produce a concise, structured summary
-for a researcher. Answer strictly in {language_name}.
-
-Paper metadata:
-- Title: {paper.title}
-- Abstract: {paper.summary}
-- Authors: {", ".join(paper.authors) or "N/A"}
-- Categories: {categories}
-- arXiv ID: {paper.id}
-- arXiv URL: {paper.link_abs}
-- Matched keyphrases (user interests): {keyphrases}
-- Direction include_keywords: {include_kw}
-- Existing why_this_paper (selection rationale): {why_text}
-
-Please output the summary in plain text with the following numbered sections:
-
-1. Subfield and problem definition
-- State the specific research subfield this paper belongs to (e.g., class-incremental continual learning, multi-task representation learning, etc.).
-- Give a 1–2 sentence precise definition of the main problem being addressed (what setting, what constraints).
-
-2. Motivation
-- List 1–3 concrete limitations of existing work that the paper highlights.
-- Explain what property or metric the paper aims to improve (e.g., stability-plasticity trade-off, sample efficiency, inference cost).
-
-3. What the paper claims to solve
-- Summarize 2–4 main contributions, each as "problem → idea" if possible.
-- Clarify whether contributions are about data, model architecture, training strategy, inference strategy, or evaluation protocol.
-
-4. Method overview (high level)
-- Describe the core method as 3–6 ordered steps (input → processing modules → output).
-- Highlight the 1–2 design choices that most directly address the motivation (e.g., a specific loss, memory mechanism, routing/gating, etc.).
-
-5. Relevance for the user
-- In 1–2 sentences, explain why this paper could be useful for someone interested in the user's keyphrases and queries (e.g., continual learning with routing/gating, mixture-of-experts, etc.).
-
-If the metadata is insufficient to answer a specific bullet reliably, explicitly say
-"Information insufficient to judge" for that bullet instead of guessing.
-"""
+    try:
+        return template.format(
+            language_name=language_name,
+            paper_title=paper.title,
+            paper_summary=paper.summary,
+            paper_authors=", ".join(paper.authors) or "N/A",
+            paper_categories=categories,
+            paper_id=paper.id,
+            paper_link_abs=paper.link_abs,
+            keyphrases=keyphrases,
+            include_kw=include_kw,
+            why_text=why_text,
+        ).strip()
+    except KeyError as exc:
+        logger.warning(
+            "Invalid prompts.research_summary_template placeholder: %s. Falling back to built-in default.",
+            exc,
+        )
+        return DEFAULT_RESEARCH_SUMMARY_TEMPLATE.format(
+            language_name=language_name,
+            paper_title=paper.title,
+            paper_summary=paper.summary,
+            paper_authors=", ".join(paper.authors) or "N/A",
+            paper_categories=categories,
+            paper_id=paper.id,
+            paper_link_abs=paper.link_abs,
+            keyphrases=keyphrases,
+            include_kw=include_kw,
+            why_text=why_text,
+        )
 
 
 def _call_openai_chat(prompt: str, model: str, timeout_seconds: int) -> Optional[str]:
@@ -102,6 +138,13 @@ def _call_openai_chat(prompt: str, model: str, timeout_seconds: int) -> Optional
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
+        global _openai_key_warned
+        if not _openai_key_warned:
+            logger.warning(
+                "OPENAI_API_KEY is not set; research summary will be skipped. "
+                "Set it in your environment (e.g. export OPENAI_API_KEY=...) to enable LLM summaries."
+            )
+            _openai_key_warned = True
         return None
 
     url = "https://api.openai.com/v1/chat/completions"

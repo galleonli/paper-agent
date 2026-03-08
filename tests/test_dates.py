@@ -1,10 +1,10 @@
-"""Tests for lookback date filter (UTC)."""
+"""Tests for lookback date filter (system local time)."""
 
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from paper_agent.dates import parse_arxiv_updated, within_lookback
+from paper_agent.dates import get_now, get_run_date, parse_arxiv_updated, within_lookback
 
 
 def test_parse_arxiv_updated() -> None:
@@ -14,8 +14,18 @@ def test_parse_arxiv_updated() -> None:
     assert parse_arxiv_updated("invalid") is None
 
 
+def test_get_run_date_and_get_now() -> None:
+    """get_run_date and get_now use system local time."""
+    from datetime import date
+
+    run_date = get_run_date()
+    assert isinstance(run_date, date)
+    now = get_now()
+    assert now.date() == run_date
+
+
 def test_within_lookback_recent() -> None:
-    """Paper updated today is within 7 days lookback."""
+    """Paper updated 'now' (UTC) is within 7 days lookback when compared in local time."""
     now = datetime.now(timezone.utc)
     s = now.isoformat().replace("+00:00", "Z")
     assert within_lookback(s, 7) is True

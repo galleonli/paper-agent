@@ -4,11 +4,10 @@ Pipeline orchestration: load config -> fetch -> lookback -> filter/rank -> state
 Catch-up safe and idempotent: seen state is persisted after local output.
 """
 
-from datetime import date, datetime, timezone
 from pathlib import Path
 
 from paper_agent.core.config import Config, load_config
-from paper_agent.core.dates import within_lookback
+from paper_agent.core.dates import get_now, get_run_date, within_lookback
 from paper_agent.core.logging import setup_run_logging
 from paper_agent.core.models import Paper
 from paper_agent.core.state import filter_unseen, save_seen
@@ -66,14 +65,14 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     scholar_provider = "off"
     if config.sources.scholar_alerts.enabled:
         scholar_provider = config.sources.scholar_alerts.email.provider
-        now = datetime.now(timezone.utc)
+        now = get_now()
         scholar_new = scholar_alerts_source.fetch(
             now=now,
             lookback_days=direction.lookback_days,
             config=config,
         )
 
-    # Lookback filter: keep only papers updated within last lookback_days (UTC)
+    # Lookback filter: keep only papers updated within last lookback_days (system local)
     papers_raw = [p for p in papers_raw if within_lookback(p.updated, direction.lookback_days)]
     after_category = count_after_category(
         papers_raw, direction.allow_categories, direction.deny_categories
@@ -96,7 +95,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     autotune_params: TunedPolicyParams | None = None
     autotune_daily_reward = 0.0
 
-    run_date = date.today()
+    run_date = get_run_date()
 
     autotune_controller: AutoTuneController | None = None
     if autotune_enabled:

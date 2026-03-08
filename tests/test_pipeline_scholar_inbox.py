@@ -13,7 +13,6 @@ from paper_agent.selection import select_topk as real_select_topk
 def _config_with_scholar(tmp_path: Path) -> Path:
     """Build a config with small discovery quota and Scholar Inbox enabled."""
     cfg = f"""
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []

@@ -30,7 +30,6 @@ def _paper(paper_id: str, title: str = "Test Paper", days_ago: int = 0) -> Paper
 
 def _minimal_config(tmp_path: Path, **kwargs: str) -> str:
     base = """
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []
@@ -97,6 +96,7 @@ def _write_config(
     slack_enabled: bool = False,
     policy_type: str = "deterministic",
     autotune_block: str = "",
+    summarize_enabled: bool = False,
 ) -> Path:
     """Write config.yaml for tests with small targeted toggles."""
     cfg = _minimal_config(tmp_path)
@@ -108,6 +108,11 @@ def _write_config(
     cfg = cfg.replace("enabled: false", f"enabled: {str(slack_enabled).lower()}", 1)
     if slack_enabled:
         cfg = cfg.replace('webhook_url: ""', 'webhook_url: "https://hooks.slack.com/fake"')
+    if summarize_enabled:
+        cfg = cfg.replace(
+            "summarize:\n  enabled: false\n  brief_summary: true",
+            "summarize:\n  enabled: true\n  provider: openai\n  model: gpt-4o-mini\n  brief_summary: true\n  research_summary_enabled: true",
+        )
     if autotune_block:
         cfg += autotune_block
     path = tmp_path / "config.yaml"
@@ -346,3 +351,37 @@ def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> Non
     assert len(list(library_dir.glob("*/*.md"))) == 1
     assert len(list(library_dir.glob("*/*.bib"))) == 1
     assert len(list(library_dir.glob("*/*.ris"))) == 1
+
+
+def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tmp_path: Path) -> None:
+    """
+    With summarize enabled and OpenAI API mocked to return a known body,
+    the pipeline must write a note that contains the Research-focused summary section.
+    Proves the API path is wired into the pipeline and note output.
+    """
+    config_path = _write_config(
+        tmp_path,
+        arxiv_enabled=True,
+        slack_enabled=False,
+        summarize_enabled=True,
+    )
+    fake_paper = _paper("2501.11111", title="Test Paper For Summary")
+    mocked_summary_body = "MOCKED_RESEARCH_SUMMARY_FROM_API_XYZ"
+
+    with (
+        patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
+        patch(
+            "paper_agent.core.summarize._call_openai_chat",
+            return_value=mocked_summary_body,
+        ),
+    ):
+        result = pipeline_run(config_path)
+
+    assert len(result) == 1
+    library_dir = tmp_path / "library"
+    date_subdir = datetime.now().date().isoformat()
+    note_path = library_dir / date_subdir / "2501.11111.md"
+    assert note_path.exists(), f"Note file not found: {note_path}"
+    content = note_path.read_text(encoding="utf-8")
+    assert "Research-focused summary" in content, "Note should contain research summary heading"
+    assert mocked_summary_body in content, "Note should contain the body returned by mocked API"

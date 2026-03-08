@@ -8,7 +8,6 @@ from paper_agent.core.config import Config, load_config
 
 def _config_for_reward(tmp_path: Path) -> Config:
     yaml_text = f"""
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []

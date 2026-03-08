@@ -1,11 +1,13 @@
 """
 State management for idempotency and catch-up.
 Persists seen paper IDs (and optional last run time) in state_dir/seen.json.
+All timestamps use system local time.
 """
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
+
+from paper_agent.core.dates import get_now
 
 
 SEEN_FILENAME = "seen.json"
@@ -58,13 +60,13 @@ def load_seen(state_dir: str | Path) -> set[str]:
 def save_seen(state_dir: str | Path, seen_ids: set[str]) -> None:
     """
     Persist seen paper IDs to state_dir/seen.json.
-    Creates state_dir if needed. Optionally stores last_run_utc for debugging.
+    Creates state_dir if needed. Optionally stores last_run (system local) for debugging.
     """
     path = state_path(state_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "seen_ids": sorted(seen_ids),
-        "last_run_utc": datetime.now(timezone.utc).isoformat(),
+        "last_run": get_now().isoformat(),
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)

@@ -10,7 +10,6 @@ from paper_agent.core.config import Config
 
 def _config_with_autotune(tmp_path: Path) -> Config:
     yaml_text = f"""
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []
@@ -144,7 +143,6 @@ def test_autotune_thompson_converges_basic(tmp_path: Path) -> None:
     """Simulate rounds where candidate 'A' always gets higher reward; it should be chosen more often."""
     # Three candidates: A (best), B, C.
     yaml_text = f"""
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []

@@ -27,7 +27,6 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 def _base_config(tmp_path: Path, provider: str = "eml_dir", eml_dir: str = "", mbox_path: str = "") -> Config:
     """Minimal Config with Scholar Alerts (email)."""
     return Config(
-        timezone="UTC",
         direction=DirectionConfig(max_papers_per_day=10, lookback_days=7),
         delivery=DeliveryConfig(
             library_dir=str(tmp_path / "library"),

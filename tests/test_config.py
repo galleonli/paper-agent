@@ -112,7 +112,6 @@ def test_load_config_example_file() -> None:
 def test_load_config_supports_scholar_imap_shape(tmp_path: Path) -> None:
     """Scholar Alerts email+imap config shape is accepted and normalized."""
     yaml_content = """
-timezone: "UTC"
 interests:
   seeds: []
   keyphrases: []
