@@ -42,3 +42,20 @@ def test_one_liner_does_not_depend_on_brief_summary_flag() -> None:
     )
     assert "One-liner:" in msg
 
+
+def test_slack_message_keeps_dated_note_relative_path() -> None:
+    """Slack message should preserve dated note path provided by pipeline."""
+    cfg = Config()
+    cfg.delivery.slack.show_brief_summary = True
+    cfg.summarize.brief_one_liner_enabled = True
+
+    note_rel = "2025-01-02/2301.12345.md"
+    msg = _build_slack_message(
+        discovery=[_ranked_sample()],
+        scholar_inbox=[],
+        config=cfg,
+        discovery_note_paths=[note_rel],
+        scholar_note_paths=[],
+    )
+    assert note_rel in msg
+

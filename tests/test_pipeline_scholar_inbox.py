@@ -298,11 +298,57 @@ def test_exports_are_discovery_only_not_scholar(tmp_path: Path) -> None:
 
     assert len(result) == 2
     library = tmp_path / "library"
+    run_subdir = library / datetime.now().date().isoformat()
     discovery_name = safe_paper_id_for_path(discovery_papers[0].id)
     scholar_name = safe_paper_id_for_path(scholar_papers[0].id)
 
-    assert (library / f"{discovery_name}.bib").exists()
-    assert (library / f"{discovery_name}.ris").exists()
-    assert not (library / f"{scholar_name}.bib").exists()
-    assert not (library / f"{scholar_name}.ris").exists()
+    assert (run_subdir / f"{discovery_name}.bib").exists()
+    assert (run_subdir / f"{discovery_name}.ris").exists()
+    assert not (run_subdir / f"{scholar_name}.bib").exists()
+    assert not (run_subdir / f"{scholar_name}.ris").exists()
+
+
+def test_research_summary_is_discovery_only_not_scholar(tmp_path: Path) -> None:
+    """Pipeline should call research-summary builder only for discovery items."""
+    config_path = _config_with_scholar(tmp_path)
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    discovery_papers = [
+        Paper(
+            id="disc-summary-1",
+            title="Discovery Summary 1",
+            summary="Abstract",
+            authors=["Alice"],
+            categories=["cs.LG"],
+            updated=now_iso,
+            link_abs="https://arxiv.org/abs/disc-summary-1",
+            link_pdf=None,
+        )
+    ]
+    scholar_papers = [
+        Paper(
+            id="scholar:arxiv:2601.00001",
+            title="Scholar Summary Check",
+            summary="",
+            authors=["Bob"],
+            categories=[],
+            updated=now_iso,
+            link_abs="https://arxiv.org/abs/2601.00001",
+            link_pdf=None,
+        )
+    ]
+
+    with (
+        patch("paper_agent.pipeline.fetch_arxiv", return_value=discovery_papers),
+        patch("paper_agent.pipeline.scholar_alerts_source.fetch", return_value=scholar_papers),
+        patch(
+            "paper_agent.pipeline.build_research_summary",
+            return_value=("Research-focused summary", "LLM output"),
+        ) as summary_mock,
+    ):
+        result = pipeline_run(config_path)
+
+    assert len(result) == 2
+    assert summary_mock.call_count == 1
+    assert summary_mock.call_args.args[0].id == "disc-summary-1"
 

@@ -25,10 +25,13 @@ def _ranked(paper_id: str = "2301.12345", title: str = "Test Paper", why: str | 
 
 
 def test_write_local_note(tmp_path: Path) -> None:
-    """write_local_note creates library_dir/{id}.md with title, summary, why_this_paper."""
+    """write_local_note creates library_dir/YYYY-MM-DD/{id}.md with expected content."""
     r = _ranked()
-    path = write_local_note(r, tmp_path, date(2024, 1, 15), source="arxiv")
+    run_date = date(2024, 1, 15)
+    path = write_local_note(r, tmp_path, run_date, source="arxiv")
     assert path.exists()
+    assert path.parent.name == run_date.isoformat()
+    assert path.name == "2301.12345.md"
     text = path.read_text(encoding="utf-8")
     assert "Test Paper" in text
     assert "Keyphrase matched" in text
@@ -39,7 +42,8 @@ def test_write_daily_digest(tmp_path: Path) -> None:
     """write_daily_digest creates daily_dir/YYYY-MM-DD.md with two sections (Daily Precision + Scholar Inbox)."""
     discovery = [_ranked("1", "First"), _ranked("2", "Second")]
     scholar = [_ranked("3", "Third")]
-    path = write_daily_digest(discovery, scholar, tmp_path, date(2024, 1, 15))
+    run_date = date(2024, 1, 15)
+    path = write_daily_digest(discovery, scholar, tmp_path, run_date)
     assert path.exists()
     assert path.name == "2024-01-15.md"
     text = path.read_text(encoding="utf-8")
@@ -49,6 +53,9 @@ def test_write_daily_digest(tmp_path: Path) -> None:
     assert "First" in text
     assert "Second" in text
     assert "Third" in text
+    assert "../library/2024-01-15/1.md" in text
+    assert "../library/2024-01-15/2.md" in text
+    assert "../library/2024-01-15/3.md" in text
     # Section order: Daily Precision first, then Scholar Inbox.
     assert text.index("## Daily Precision") < text.index("## Scholar Inbox")
     assert "Total papers:" in text or "Daily Precision:" in text or "Scholar Inbox:" in text
@@ -65,7 +72,7 @@ def test_digest_two_sections_format(tmp_path: Path) -> None:
     assert "Papers: 1" in text  # under each section
     assert "### Discovery A" in text
     assert "### Scholar B" in text
-    assert "../library/" in text
+    assert "../library/2025-01-01/" in text
 
 
 def test_write_local_note_scholar_source_and_placeholder(tmp_path: Path) -> None:

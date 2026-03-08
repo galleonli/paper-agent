@@ -337,11 +337,12 @@ def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> Non
 
     library_dir = tmp_path / "library"
     daily_dir = tmp_path / "daily"
-    assert (library_dir / "2403.00003.md").exists()
-    assert (library_dir / "2403.00003.bib").exists()
-    assert (library_dir / "2403.00003.ris").exists()
+    date_subdir = datetime.now().date().isoformat()
+    assert (library_dir / date_subdir / "2403.00003.md").exists()
+    assert (library_dir / date_subdir / "2403.00003.bib").exists()
+    assert (library_dir / date_subdir / "2403.00003.ris").exists()
     assert (daily_dir / f"{datetime.now().date().isoformat()}.md").exists()
     assert (tmp_path / "logs" / "latest.log").exists()
-    assert len(list(library_dir.glob("*.md"))) == 1
-    assert len(list(library_dir.glob("*.bib"))) == 1
-    assert len(list(library_dir.glob("*.ris"))) == 1
+    assert len(list(library_dir.glob("*/*.md"))) == 1
+    assert len(list(library_dir.glob("*/*.bib"))) == 1
+    assert len(list(library_dir.glob("*/*.ris"))) == 1

@@ -1,5 +1,6 @@
 """Minimal tests for BibTeX and RIS export."""
 
+from datetime import date
 from pathlib import Path
 
 from paper_agent.exporters import write_bibtex, write_ris
@@ -41,3 +42,17 @@ def test_write_ris(tmp_path: Path) -> None:
     assert "TY  - GEN" in text
     assert "Test Paper Title" in text
     assert "ER  - " in text
+
+
+def test_write_exports_with_run_date_subdir(tmp_path: Path) -> None:
+    """Exports can be written under library_dir/YYYY-MM-DD when run_date is provided."""
+    p = _paper()
+    run_date = date(2025, 1, 2)
+    bib_path = write_bibtex(p, tmp_path, run_date=run_date)
+    ris_path = write_ris(p, tmp_path, run_date=run_date)
+
+    assert bib_path.exists() and ris_path.exists()
+    assert bib_path.parent == tmp_path / "2025-01-02"
+    assert ris_path.parent == tmp_path / "2025-01-02"
+    assert bib_path.name == "2301.12345.bib"
+    assert ris_path.name == "2301.12345.ris"
