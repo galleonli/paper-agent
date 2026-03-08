@@ -4,7 +4,7 @@
 
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
-*Discover relevant arXiv papers with explainable, interest-aware selection instead of raw keyword matching.
+*Discover relevant arXiv papers with explainable, interest-aware selection (instead of raw keyword matching).
 Keep Google Scholar Alert emails in a separate inbox, then write local notes, Slack digests, and BibTeX/RIS exports.*
 
 [**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Google Scholar setup**](#google-scholar-setup) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
@@ -52,6 +52,17 @@ Edit `config.yaml` at minimum:
 - optional `sources.scholar_alerts.*`
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
+
+### Run daily (automatic)
+
+Run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
+
+```bash
+CRON_TZ=Europe/Berlin
+0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
+```
+
+Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed. More options: [Scheduling](#scheduling).
 
 ---
 
@@ -178,31 +189,53 @@ Papers: 3
 
 ## Scheduling
 
-Run daily via cron (or your scheduler). Set timezone with `CRON_TZ`:
-
-```bash
-CRON_TZ=Europe/Berlin
-0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
-```
+Daily automation is covered in [Quick start → Run daily (automatic)](#run-daily-automatic). Use cron (or launchd / systemd timer) with `CRON_TZ` set to your timezone.
 
 ---
 
 ## Troubleshooting
 
-- **Where are logs?**  
-  `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`.
+### Logs and state
 
-- **Second run still shows new papers?**  
-  Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Same `library_dir` and `daily_dir` across runs.
+- **Where are logs?**  
+  `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `fetched_total`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`. Inspect this first when something looks wrong.
+
+- **Second run still shows new papers / duplicates?**  
+  Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Use the same `library_dir` and `daily_dir` across runs. If you changed the repo path or run from a different working directory, state may not be found and papers can be treated as new again.
+
+### Config and startup
+
+- **Config file not found / Invalid YAML / Invalid config**  
+  Run with an explicit path: `python -m paper_agent run --config config.yaml`. Ensure the file exists and is valid YAML. Typical validation errors: unknown `export.formats` value, invalid `sources.scholar_alerts.email.provider`, invalid `policy.type`. Fix the reported key and re-run.
+
+- **No discovery papers at all (arXiv)?**  
+  Check: (1) `direction.allow_categories` or `direction.queries` — at least one must yield results. (2) `direction.lookback_days` — papers are filtered by update date within this window. (3) `interests.keyphrases` — if non-empty, each paper needs at least one keyphrase match or seed match to pass. Relax filters or add keyphrases and re-run.
+
+### Slack
 
 - **Slack not sending?**  
-  Check `delivery.slack.webhook_url`; if Slack fails, the run still writes local outputs and marks papers seen (no re-send next run).
+  Check `delivery.slack.enabled` and `delivery.slack.webhook_url`. Use a valid Slack Incoming Webhook URL. If the webhook fails, the run still writes local notes, digest, and exports and marks papers seen; Slack is best-effort and is not retried on the next run.
+
+### Scholar Inbox
 
 - **No Scholar items?**  
-  Confirm `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set. For mbox/eml: set `sources.scholar_alerts.email.mbox_path` or `sources.scholar_alerts.email.eml_dir` and ensure messages are within `direction.lookback_days`. For IMAP: set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env` (default env var name `IMAP_PASSWORD`). If configured, `sources.scholar_alerts.email.gmail_label` is used and falls back to `INBOX` when label select fails. Check `scholar_provider` in `latest.log`.
+  - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, or `imap` (or `gmail`).  
+  - **mbox/eml_dir:** Set `sources.scholar_alerts.email.mbox_path` or `sources.scholar_alerts.email.eml_dir`; ensure messages exist and are within `direction.lookback_days`.  
+  - **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; put the password in the environment (e.g. `IMAP_PASSWORD`). If you use `sources.scholar_alerts.email.gmail_label`, the implementation uses it and falls back to `INBOX` if the label cannot be selected.  
+  - Check `logs/latest.log` for `scholar_provider` and `scholar_new` to confirm the source and count.
 
 - **IMAP login works but no papers are extracted?**  
-  Inspect one raw Scholar Alert email and confirm the parser can extract paper entries from its current HTML/text structure. Check whether the message actually contains paper links and whether your `sources.scholar_alerts.light_filter.*` conditions are too strict.
+  Inspect one raw Scholar Alert email and confirm the parser can extract paper entries from its current HTML/text structure. Check that the message body actually contains paper links. If you use `sources.scholar_alerts.light_filter.include_keywords`, ensure at least one matches; if filters are too strict, you may get zero items.
+
+### Summarization (optional)
+
+- **Research summary missing or "OPENAI_API_KEY is not set"?**  
+  The research-focused summary is optional. If `summarize.enabled` is true and you want LLM summaries, set `OPENAI_API_KEY` in your environment before running. If you do not set it, the pipeline still runs and writes notes with abstract/snippet summary only; the research-summary section is omitted.
+
+### Cron / scheduling
+
+- **Cron job does not run or runs at wrong time?**  
+  Set `CRON_TZ` to your timezone (e.g. `CRON_TZ=Europe/Berlin`). Use the full path to the repo and to the venv Python in the cron line. Ensure the user running cron has read access to the repo and write access to `state_dir`, `library_dir`, `daily_dir`, and `logs_dir`.
 
 ---
 
