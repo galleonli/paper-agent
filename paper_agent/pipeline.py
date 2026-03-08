@@ -216,7 +216,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             research_summary=research_summary,
             source="arxiv",
         )
-        discovery_note_paths.append(note_path.name)
+        discovery_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
 
     scholar_note_paths: list[str] = []
     for r in scholar_ranked:
@@ -229,7 +229,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             research_summary=None,
             source="scholar_alerts",
         )
-        scholar_note_paths.append(note_path.name)
+        scholar_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
 
     digest_path = write_daily_digest(
         ranked_unseen,
@@ -241,9 +241,9 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     # Export BibTeX / RIS (only for discovery for now; Scholar Inbox often lacks metadata).
     for r in ranked_unseen:
         if "bibtex" in config.export.formats:
-            write_bibtex(r.paper, delivery.library_dir)
+            write_bibtex(r.paper, delivery.library_dir, run_date=run_date)
         if "ris" in config.export.formats:
-            write_ris(r.paper, delivery.library_dir)
+            write_ris(r.paper, delivery.library_dir, run_date=run_date)
 
     # Persist seen after local output for discovery feed (Scholar Inbox already persisted in source).
     save_seen(delivery.state_dir, seen_cache)

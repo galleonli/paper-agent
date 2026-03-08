@@ -1,9 +1,10 @@
 """
 Export selected papers to BibTeX and RIS (EndNote-compatible).
-Writes to library_dir: {id}.bib and {id}.ris.
+Writes to library_dir/YYYY-MM-DD: {id}.bib and {id}.ris.
 """
 
 import re
+from datetime import date
 from pathlib import Path
 
 from paper_agent.core.models import Paper
@@ -28,9 +29,10 @@ def _year_from_updated(updated: str) -> str:
     return m.group(1) if m else ""
 
 
-def write_bibtex(paper: Paper, library_dir: str | Path) -> Path:
-    """Write one paper to library_dir/{id}.bib. Returns path."""
-    path = Path(library_dir) / f"{safe_paper_id_for_path(paper.id)}.bib"
+def write_bibtex(paper: Paper, library_dir: str | Path, run_date: date | None = None) -> Path:
+    """Write one paper to library_dir[/YYYY-MM-DD]/{id}.bib. Returns path."""
+    target_dir = Path(library_dir) / run_date.isoformat() if run_date is not None else Path(library_dir)
+    path = target_dir / f"{safe_paper_id_for_path(paper.id)}.bib"
     path.parent.mkdir(parents=True, exist_ok=True)
     key = paper.id.replace(".", "_").replace(":", "_")[:64]
     authors_bt = " and ".join(_bibtex_escape(a) for a in paper.authors) if paper.authors else ""
@@ -47,9 +49,10 @@ def write_bibtex(paper: Paper, library_dir: str | Path) -> Path:
     return path
 
 
-def write_ris(paper: Paper, library_dir: str | Path) -> Path:
-    """Write one paper to library_dir/{id}.ris (EndNote-compatible). Returns path."""
-    path = Path(library_dir) / f"{safe_paper_id_for_path(paper.id)}.ris"
+def write_ris(paper: Paper, library_dir: str | Path, run_date: date | None = None) -> Path:
+    """Write one paper to library_dir[/YYYY-MM-DD]/{id}.ris (EndNote-compatible). Returns path."""
+    target_dir = Path(library_dir) / run_date.isoformat() if run_date is not None else Path(library_dir)
+    path = target_dir / f"{safe_paper_id_for_path(paper.id)}.ris"
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "TY  - GEN",

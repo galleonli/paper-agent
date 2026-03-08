@@ -1,6 +1,6 @@
 """
 Local output: per-paper notes in library_dir and daily digest in daily_dir.
-Contract: library/{arxiv_id}.md (Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Summary);
+Contract: library/YYYY-MM-DD/{arxiv_id}.md (Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Summary);
 daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
 
@@ -31,13 +31,14 @@ def write_local_note(
     source: str | None = None,
 ) -> Path:
     """
-    Write one markdown note to library_dir/{arxiv_id}.md.
+    Write one markdown note to library_dir/YYYY-MM-DD/{arxiv_id}.md.
     Header: Title, arXiv ID, Published, Authors, Link, Categories; then Abstract; then Summary.
     """
     paper = ranked.paper
-    Path(library_dir).mkdir(parents=True, exist_ok=True)
+    run_subdir = Path(library_dir) / run_date.isoformat()
+    run_subdir.mkdir(parents=True, exist_ok=True)
     name = safe_paper_id_for_path(paper.id)
-    path = Path(library_dir) / f"{name}.md"
+    path = run_subdir / f"{name}.md"
 
     why = ranked.why_this_paper or "—"
     summary_text = _brief_summary_for_note(paper, brief_one_liner)
@@ -126,7 +127,7 @@ def write_daily_digest(
         p = r.paper
         note_name = safe_paper_id_for_path(p.id)
         note_label = f"{note_name}.md"
-        note_href = f"../library/{note_name}.md"
+        note_href = f"../library/{run_date.isoformat()}/{note_name}.md"
         why = r.why_this_paper or "—"
         lines.append(f"### {p.title}")
         lines.append("")
@@ -146,7 +147,7 @@ def write_daily_digest(
         p = r.paper
         note_name = safe_paper_id_for_path(p.id)
         note_label = f"{note_name}.md"
-        note_href = f"../library/{note_name}.md"
+        note_href = f"../library/{run_date.isoformat()}/{note_name}.md"
         lines.append(f"### {p.title}")
         lines.append("")
         lines.append(f"- **Link**: {p.link_abs}")
