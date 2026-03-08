@@ -98,14 +98,14 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
 | **Direction (scope)** | `direction.lookback_days` applies to both discovery and Scholar Inbox (arrival window for Scholar); `direction.max_papers_per_day` and `direction.allow_categories` / `direction.deny_categories` / `direction.queries` / `direction.include_keywords` / `direction.exclude_keywords` / `direction.exclude_authors` apply to discovery only |
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
-| **Summarization** | `summarize.enabled`, `summarize.provider`, `summarize.model`, `summarize.language`, `summarize.brief_one_liner_enabled`, `summarize.research_summary_enabled`; for OpenAI, set `OPENAI_API_KEY` in the environment rather than storing it in `config.yaml` |
+| **Summarization** | `summarize.enabled`, `summarize.provider`, `summarize.model`, `summarize.language`, `summarize.brief_one_liner_enabled`, `summarize.research_summary_enabled`; optional advanced prompt override at `prompts.research_summary_template`; for OpenAI, set `OPENAI_API_KEY` in the environment rather than storing it in `config.yaml` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
 | **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap` \| `gmail`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
 | **Scholar email source** | `sources.scholar_alerts.email.mbox_path`, `sources.scholar_alerts.email.eml_dir`, or IMAP keys `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, `sources.scholar_alerts.email.imap_password_env`, `sources.scholar_alerts.email.gmail_label` |
 | **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics`; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
 | **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
 
-Timezone for *when* the job runs: set `CRON_TZ` in the environment; `timezone` in config is metadata only.
+All dates (paths, digest filename, run date, lookback) use **system local time** only; no timezone config. For cron, set `CRON_TZ` if you want the job to run at a specific wall-clock time.
 If you enable OpenAI-based research summaries, set `OPENAI_API_KEY` in your shell environment before running the pipeline.
 
 Example:
@@ -123,6 +123,8 @@ If you do **not** use AI summarization:
 - The pipeline still writes notes, digest, exports, logs, and optional Slack output.
 - The note `Summary` section falls back to a short abstract/snippet summary.
 - The extra structured `Research-focused summary` section is simply omitted.
+
+If you want to customize the research-summary prompt, leave the built-in default as-is or override it with `prompts.research_summary_template` near the end of `config.yaml`.
 
 ---
 
