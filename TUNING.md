@@ -35,6 +35,11 @@ For most users:
 
 This already gives a solid Daily Precision feed.
 
+Clarification:
+
+- `direction.lookback_days` is a global catch-up window and also affects Scholar Inbox ingestion.
+- `direction.max_papers_per_day` applies to discovery only (Scholar Inbox is bounded by `sources.scholar_alerts.max_items_per_run`).
+
 ---
 
 ### 2. Policy hyperparameters (`policy.*`)

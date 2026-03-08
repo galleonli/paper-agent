@@ -92,7 +92,7 @@ sources:
 3. Check:
    - `daily/YYYY-MM-DD.md` contains a **Scholar Inbox** section with items
    - `logs/latest.log` shows `scholar_provider=imap` and `scholar_new=N` (N > 0 if you have new alerts)
-   - `library/` contains notes for Scholar items (IDs prefixed with `scholar:`)
+   - `library/YYYY-MM-DD/` contains notes for Scholar items (IDs prefixed with `scholar:`)
    - If Slack is enabled: Scholar items appear in the Slack brief when `push_to_slack: true`
 
 ---

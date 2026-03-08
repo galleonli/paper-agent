@@ -4,8 +4,8 @@
 
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
-*Discover relevant arXiv papers with an interest-aware, explainable selection process, not just raw keyword matching.
-Keep Google Scholar Alert emails in a separate inbox, then export local notes, Slack digests, and BibTeX/RIS artifacts.*
+*Discover relevant arXiv papers with explainable, interest-aware selection instead of raw keyword matching.
+Keep Google Scholar Alert emails in a separate inbox, then write local notes, Slack digests, and BibTeX/RIS exports.*
 
 [**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Google Scholar setup**](#google-scholar-setup) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
 
@@ -25,7 +25,7 @@ Keep Google Scholar Alert emails in a separate inbox, then export local notes, S
 
 ## Key features
 
-- **Daily Precision (arXiv):** Discover relevant arXiv papers with explainable interest signals, policy-based ranking, and optional exploration/diversity controls, rather than simple keyword-only matching.
+- **Daily Precision (arXiv):** Explainable interest signals, policy-based ranking, and optional exploration/diversity controls instead of simple keyword-only matching.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
 - **Workflow-friendly outputs:** Generate local notes, daily digests, optional Slack summaries, and BibTeX/RIS exports.
@@ -98,6 +98,7 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
 | **Direction (scope)** | `direction.lookback_days` applies to both discovery and Scholar Inbox (arrival window for Scholar); `direction.max_papers_per_day` and `direction.allow_categories` / `direction.deny_categories` / `direction.queries` / `direction.include_keywords` / `direction.exclude_keywords` / `direction.exclude_authors` apply to discovery only |
 | **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
+| **Summarization** | `summarize.enabled`, `summarize.provider`, `summarize.model`, `summarize.language`, `summarize.brief_one_liner_enabled`, `summarize.research_summary_enabled`; for OpenAI, set `OPENAI_API_KEY` in the environment rather than storing it in `config.yaml` |
 | **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
 | **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap` \| `gmail`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
 | **Scholar email source** | `sources.scholar_alerts.email.mbox_path`, `sources.scholar_alerts.email.eml_dir`, or IMAP keys `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, `sources.scholar_alerts.email.imap_password_env`, `sources.scholar_alerts.email.gmail_label` |
@@ -105,6 +106,23 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 | **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
 
 Timezone for *when* the job runs: set `CRON_TZ` in the environment; `timezone` in config is metadata only.
+If you enable OpenAI-based research summaries, set `OPENAI_API_KEY` in your shell environment before running the pipeline.
+
+Example:
+
+```bash
+echo 'export OPENAI_API_KEY="your_openai_api_key"' >> ~/.zshrc
+source ~/.zshrc
+echo $OPENAI_API_KEY
+python -m paper_agent run --config config.yaml
+```
+
+If you do **not** use AI summarization:
+
+- You do **not** need to set `OPENAI_API_KEY`.
+- The pipeline still writes notes, digest, exports, logs, and optional Slack output.
+- The note `Summary` section falls back to a short abstract/snippet summary.
+- The extra structured `Research-focused summary` section is simply omitted.
 
 ---
 
@@ -112,10 +130,10 @@ Timezone for *when* the job runs: set `CRON_TZ` in the environment; `timezone` i
 
 | Artifact | Path | Contents |
 |----------|------|----------|
-| **Notes** | `library/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/summary, why-this-paper, key points. Scholar items may contain only partial metadata; notes include placeholders when abstract or authors are unavailable. |
-| **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped), **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/{id}.md`. |
+| **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/summary, why-this-paper, key points. Discovery notes may include optional LLM-based `Research-focused summary`; Scholar notes stay light and may contain placeholders. |
+| **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`. |
 | **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
-| **Exports** | `library/{id}.bib`, `library/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
+| **Exports** | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
 
 Example digest snippet:
 
@@ -128,13 +146,13 @@ Papers: 2
 ### First paper
 - **Why**: Keyphrase matched.
 - **Link**: https://arxiv.org/abs/2501.00001
-- **Local note**: [2501.00001.md](../library/2501.00001.md)
+- **Local note**: [2501.00001.md](../library/2025-01-02/2501.00001.md)
 ---
 ## Scholar Inbox
 Papers: 3
 ### Scholar item title
 - **Link**: https://...
-- **Local note**: [scholar....md](../library/...)
+- **Local note**: [scholar....md](../library/2025-01-02/scholar....md)
 ```
 
 ---
@@ -148,9 +166,10 @@ Papers: 3
 
 ### Scholar Inbox (email alerts)
 
-- Ingest from **Google Scholar Alert emails** only (mbox file, directory of .eml files, or Gmail IMAP). No RSS; no crawling of Google Scholar.
+- Ingest **Google Scholar Alert emails** only (mbox, `.eml` directory, or Gmail IMAP). No RSS and no Google Scholar crawling.
 - **Not** capped by `max_papers_per_day`; bounded only by `sources.scholar_alerts.max_items_per_run`.
 - **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`sources.scholar_alerts.light_filter.include_keywords`, `sources.scholar_alerts.light_filter.exclude_keywords`, `sources.scholar_alerts.light_filter.exclude_authors`).
+- Scholar notes do not include the optional LLM `Research-focused summary` section.
 - Setup and provider details: see [Google Scholar setup](#google-scholar-setup) and [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md).
 
 ---
