@@ -66,6 +66,13 @@ CRON_TZ=Europe/Berlin
 
 Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed. More options: [Scheduling](#scheduling).
 
+### CLI commands
+
+- **`python -m paper_agent run --config config.yaml`** — Run the full pipeline once.
+- **`python -m paper_agent today --json --config config.yaml`** — Print today's local paper entries as JSON.
+- **`python -m paper_agent list --json --limit 20 --config config.yaml`** — Print recent local paper entries as JSON (optional `--limit`).
+- **`python -m paper_agent open <paper_id> --config config.yaml`** — Open the local Markdown note for the given paper id.
+
 ---
 
 ## Google Scholar setup
@@ -146,6 +153,7 @@ If you want to customize the research-summary prompt, leave the built-in default
 | Artifact | Path | Contents |
 |----------|------|----------|
 | **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/snippet summary, why-this-paper, and key points. Discovery notes may also include an optional LLM-based `Research-focused summary`; Scholar notes stay light and may contain placeholders. |
+| **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json` | Machine-readable mirror of each note (id, title, authors, link, summary, why_this_paper, etc.) for programmatic use. |
 | **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`. |
 | **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
 | **Exports** | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
