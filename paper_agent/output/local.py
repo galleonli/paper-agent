@@ -4,6 +4,7 @@ Contract: library/YYYY-MM-DD/{arxiv_id}.md (Title, arXiv ID, Published, Authors,
 daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
 
+import json
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,47 @@ def _brief_summary_for_note(paper: Paper, one_liner: Optional[str] = None) -> st
     if paper.summary:
         return (paper.summary[:300] + "…") if len(paper.summary) > 300 else paper.summary
     return "No summary available."
+
+
+def _paper_metadata(
+    *,
+    paper: Paper,
+    run_date: date,
+    note_name: str,
+    source: str,
+    published: str,
+    abstract_body: str,
+    summary_text: str,
+    why: str,
+    research_summary: Optional[tuple[str, str]],
+) -> dict[str, object]:
+    """
+    Build JSON metadata that mirrors the Markdown note content.
+
+    This function reuses the same derived strings used for the Markdown body, so
+    JSON stays consistent even if summary/why/research sections change upstream.
+    """
+    data: dict[str, object] = {
+        "id": paper.id,
+        "title": paper.title,
+        "authors": paper.authors or [],
+        "source": source,
+        "date": run_date.isoformat(),
+        "link": paper.link_abs,
+        "published": published,
+        "abstract": abstract_body,
+        "summary": summary_text,
+        "why_this_paper": why,
+        "categories": paper.categories or [],
+        "note_path": f"library/{run_date.isoformat()}/{note_name}.md",
+    }
+    if research_summary is not None:
+        heading, body_text = research_summary
+        data["research_summary"] = {
+            "heading": heading,
+            "body": body_text,
+        }
+    return data
 
 
 def write_local_note(
@@ -39,6 +81,7 @@ def write_local_note(
     run_subdir.mkdir(parents=True, exist_ok=True)
     name = safe_paper_id_for_path(paper.id)
     path = run_subdir / f"{name}.md"
+    metadata_path = run_subdir / f"{name}.json"
 
     why = ranked.why_this_paper or "—"
     summary_text = _brief_summary_for_note(paper, brief_one_liner)
@@ -91,6 +134,21 @@ def write_local_note(
 """
 
     path.write_text(body, encoding="utf-8")
+    metadata = _paper_metadata(
+        paper=paper,
+        run_date=run_date,
+        note_name=name,
+        source=source_str,
+        published=published,
+        abstract_body=abstract_body,
+        summary_text=summary_text,
+        why=why,
+        research_summary=research_summary,
+    )
+    metadata_path.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 

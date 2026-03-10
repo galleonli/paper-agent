@@ -28,7 +28,7 @@ def _extract_text(el: ET.Element | None, default: str = "") -> str:
 
 
 def _extract_id_from_abs_url(url: str) -> str:
-    """Extract arXiv ID from abstract URL (e.g. http://arxiv.org/abs/2301.12345)."""
+    """Extract arXiv ID from abstract URL (e.g. https://arxiv.org/abs/2301.12345)."""
     m = re.search(r"arxiv\.org/abs/([^/?]+)", url, re.I)
     return m.group(1) if m else url
 

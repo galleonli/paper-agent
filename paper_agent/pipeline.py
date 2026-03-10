@@ -1,6 +1,6 @@
 """
 Pipeline orchestration: load config -> fetch -> lookback -> filter/rank -> state (unseen)
--> write local notes + daily digest + export -> deliver (Slack). Log failure on delivery; do not re-push.
+-> write local notes + daily digest -> deliver (Slack). Log failure on delivery; do not re-push.
 Catch-up safe and idempotent: seen state is persisted after local output.
 """
 
@@ -12,7 +12,6 @@ from paper_agent.core.logging import setup_run_logging
 from paper_agent.core.models import Paper
 from paper_agent.core.state import filter_unseen, save_seen
 from paper_agent.core.summarize import build_research_summary
-from paper_agent.export import write_bibtex, write_ris
 from paper_agent.filter_papers import RankedPaper, count_after_category, filter_and_rank
 from paper_agent.policy.base import ScoredPaper
 from paper_agent.output.local import write_daily_digest, write_local_note
@@ -39,7 +38,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     """
     Run the full pipeline. Returns all newly processed RankedPaper items
     (discovery + Scholar Inbox).
-    State is saved after local notes/digest/export; if Slack fails, we log and do not re-push next run.
+    State is saved after local notes and daily digest; if Slack fails, we log and do not re-push next run.
     """
     config = load_config(config_path)
     direction = config.direction
@@ -236,13 +235,6 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         delivery.daily_dir,
         run_date,
     )
-
-    # Export BibTeX / RIS (only for discovery for now; Scholar Inbox often lacks metadata).
-    for r in ranked_unseen:
-        if "bibtex" in config.export.formats:
-            write_bibtex(r.paper, delivery.library_dir, run_date=run_date)
-        if "ris" in config.export.formats:
-            write_ris(r.paper, delivery.library_dir, run_date=run_date)
 
     # Persist seen after local output for discovery feed (Scholar Inbox already persisted in source).
     save_seen(delivery.state_dir, seen_cache)
