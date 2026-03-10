@@ -55,6 +55,15 @@ First run writes notes, digest, and exports; second run with same state prints n
 
 OpenAI summarization is optional. If you do not set `OPENAI_API_KEY`, the pipeline still runs and falls back to abstract/snippet-based notes.
 
+### CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `python -m paper_agent run --config config.yaml` | Run the full pipeline once. |
+| `python -m paper_agent today --json --config config.yaml` | Print today's local paper entries as JSON. |
+| `python -m paper_agent list --json [--limit N] --config config.yaml` | Print recent local paper entries as JSON (optional `--limit`). |
+| `python -m paper_agent open <paper_id> --config config.yaml` | Open the local Markdown note for the given paper id. |
+
 ### Run daily (automatic)
 
 Run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
@@ -65,13 +74,6 @@ CRON_TZ=Europe/Berlin
 ```
 
 Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed. More options: [Scheduling](#scheduling).
-
-### CLI commands
-
-- **`python -m paper_agent run --config config.yaml`** — Run the full pipeline once.
-- **`python -m paper_agent today --json --config config.yaml`** — Print today's local paper entries as JSON.
-- **`python -m paper_agent list --json --limit 20 --config config.yaml`** — Print recent local paper entries as JSON (optional `--limit`).
-- **`python -m paper_agent open <paper_id> --config config.yaml`** — Open the local Markdown note for the given paper id.
 
 ---
 
