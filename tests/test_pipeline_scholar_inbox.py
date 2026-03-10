@@ -255,11 +255,10 @@ def test_seen_merge_preserves_scholar_ids_after_pipeline_save(tmp_path: Path) ->
     assert second == []
 
 
-def test_exports_are_discovery_only_not_scholar(tmp_path: Path) -> None:
+def test_bibtex_ris_only_for_discovery_not_scholar(tmp_path: Path) -> None:
     """
-    Export invariant:
-    - discovery papers produce .bib/.ris,
-    - scholar papers do not produce exports.
+    When export.formats includes bibtex/ris, pipeline writes .bib/.ris for discovery
+    papers only; Scholar Inbox items get .md/.json but no .bib/.ris.
     """
     config_path = _config_with_scholar(tmp_path)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -301,6 +300,10 @@ def test_exports_are_discovery_only_not_scholar(tmp_path: Path) -> None:
     discovery_name = safe_paper_id_for_path(discovery_papers[0].id)
     scholar_name = safe_paper_id_for_path(scholar_papers[0].id)
 
+    # Both get notes.
+    assert (run_subdir / f"{discovery_name}.md").exists()
+    assert (run_subdir / f"{scholar_name}.md").exists()
+    # Discovery gets BibTeX/RIS; Scholar Inbox does not.
     assert (run_subdir / f"{discovery_name}.bib").exists()
     assert (run_subdir / f"{discovery_name}.ris").exists()
     assert not (run_subdir / f"{scholar_name}.bib").exists()
