@@ -323,7 +323,7 @@ def test_catch_up_lookback_and_seen_behavior(tmp_path: Path) -> None:
 def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> None:
     """
     Running twice with no new input:
-    - no duplicate notes/exports,
+    - no duplicate notes,
     - no duplicate Slack push calls.
     """
     config_path = _write_config(tmp_path, arxiv_enabled=True, slack_enabled=True)
@@ -344,13 +344,9 @@ def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> Non
     daily_dir = tmp_path / "daily"
     date_subdir = datetime.now().date().isoformat()
     assert (library_dir / date_subdir / "2403.00003.md").exists()
-    assert (library_dir / date_subdir / "2403.00003.bib").exists()
-    assert (library_dir / date_subdir / "2403.00003.ris").exists()
     assert (daily_dir / f"{datetime.now().date().isoformat()}.md").exists()
     assert (tmp_path / "logs" / "latest.log").exists()
     assert len(list(library_dir.glob("*/*.md"))) == 1
-    assert len(list(library_dir.glob("*/*.bib"))) == 1
-    assert len(list(library_dir.glob("*/*.ris"))) == 1
 
 
 def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tmp_path: Path) -> None:

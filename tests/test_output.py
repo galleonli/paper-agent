@@ -1,5 +1,6 @@
 """Minimal tests for local output (notes and digest)."""
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def _ranked(paper_id: str = "2301.12345", title: str = "Test Paper", why: str | 
 
 
 def test_write_local_note(tmp_path: Path) -> None:
-    """write_local_note creates library_dir/YYYY-MM-DD/{id}.md with expected content."""
+    """write_local_note creates library_dir/YYYY-MM-DD/{id}.md and matching {id}.json."""
     r = _ranked()
     run_date = date(2024, 1, 15)
     path = write_local_note(r, tmp_path, run_date, source="arxiv")
@@ -36,6 +37,22 @@ def test_write_local_note(tmp_path: Path) -> None:
     assert "Test Paper" in text
     assert "Keyphrase matched" in text
     assert "arxiv.org/abs/2301.12345" in text
+    json_path = path.with_suffix(".json")
+    assert json_path.exists()
+    metadata = json.loads(json_path.read_text(encoding="utf-8"))
+    assert metadata["id"] == "2301.12345"
+    assert metadata["title"] == "Test Paper"
+    assert metadata["authors"] == ["Alice", "Bob"]
+    assert metadata["source"] == "arxiv"
+    assert metadata["date"] == "2024-01-15"
+    assert metadata["link"] == "https://arxiv.org/abs/2301.12345"
+    assert metadata["abstract"] == "Abstract here."
+    assert metadata["categories"] == ["cs.LG"]
+    assert metadata["note_path"] == "library/2024-01-15/2301.12345.md"
+    # JSON mirrors the main content fields from the Markdown note.
+    assert metadata["published"] == "2023-01-15"
+    assert metadata["summary"] in "Abstract here."
+    assert metadata["why_this_paper"] == "Keyphrase matched"
 
 
 def test_write_daily_digest(tmp_path: Path) -> None:
@@ -96,3 +113,34 @@ def test_write_local_note_scholar_source_and_placeholder(tmp_path: Path) -> None
     assert "Source" in text and "scholar_alerts" in text
     assert "No abstract in alert email" in text
     assert "Inbox Paper" in text
+
+
+def test_write_local_note_scholar_json_metadata(tmp_path: Path) -> None:
+    """Scholar JSON mirrors the note fields (no research summary, placeholder abstract/summary)."""
+    r = RankedPaper(
+        paper=Paper(
+            id="scholar-xyz",
+            title="Scholar JSON Paper",
+            summary="",
+            authors=["Author"],
+            categories=[],
+            updated="2025-01-03T00:00:00Z",
+            link_abs="https://example.com/scholar-json",
+            link_pdf=None,
+        ),
+        why_this_paper="From your Scholar Inbox.",
+    )
+    run_date = date(2025, 1, 3)
+    path = write_local_note(r, tmp_path, run_date, source="scholar_alerts")
+    json_path = path.with_suffix(".json")
+    assert json_path.exists()
+    metadata = json.loads(json_path.read_text(encoding="utf-8"))
+    assert metadata["id"] == "scholar-xyz"
+    assert metadata["source"] == "scholar_alerts"
+    assert metadata["published"] == "2025-01-03"
+    assert metadata["abstract"] == "No abstract in alert email."
+    # Summary falls back to generic placeholder when no abstract/one-liner.
+    assert metadata["summary"] == "No summary available."
+    assert metadata["why_this_paper"] == "From your Scholar Inbox."
+    # Scholar items never carry a research_summary section.
+    assert "research_summary" not in metadata
