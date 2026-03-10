@@ -255,10 +255,10 @@ def test_seen_merge_preserves_scholar_ids_after_pipeline_save(tmp_path: Path) ->
     assert second == []
 
 
-def test_no_bibtex_ris_exports_are_written(tmp_path: Path) -> None:
+def test_bibtex_ris_only_for_discovery_not_scholar(tmp_path: Path) -> None:
     """
-    Pipeline does not write BibTeX/RIS exports for discovery or Scholar items.
-    Only Markdown notes and the daily digest are produced.
+    When export.formats includes bibtex/ris, pipeline writes .bib/.ris for discovery
+    papers only; Scholar Inbox items get .md/.json but no .bib/.ris.
     """
     config_path = _config_with_scholar(tmp_path)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -300,12 +300,14 @@ def test_no_bibtex_ris_exports_are_written(tmp_path: Path) -> None:
     discovery_name = safe_paper_id_for_path(discovery_papers[0].id)
     scholar_name = safe_paper_id_for_path(scholar_papers[0].id)
 
-    # Notes must be written for both discovery and Scholar items.
+    # Both get notes.
     assert (run_subdir / f"{discovery_name}.md").exists()
     assert (run_subdir / f"{scholar_name}.md").exists()
-    # No BibTeX/RIS exports should be produced.
-    assert not any(run_subdir.glob("*.bib"))
-    assert not any(run_subdir.glob("*.ris"))
+    # Discovery gets BibTeX/RIS; Scholar Inbox does not.
+    assert (run_subdir / f"{discovery_name}.bib").exists()
+    assert (run_subdir / f"{discovery_name}.ris").exists()
+    assert not (run_subdir / f"{scholar_name}.bib").exists()
+    assert not (run_subdir / f"{scholar_name}.ris").exists()
 
 
 def test_research_summary_is_discovery_only_not_scholar(tmp_path: Path) -> None:
