@@ -344,9 +344,40 @@ def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> Non
     daily_dir = tmp_path / "daily"
     date_subdir = datetime.now().date().isoformat()
     assert (library_dir / date_subdir / "2403.00003.md").exists()
+    assert (library_dir / date_subdir / "2403.00003.bib").exists()
+    assert (library_dir / date_subdir / "2403.00003.ris").exists()
     assert (daily_dir / f"{datetime.now().date().isoformat()}.md").exists()
     assert (tmp_path / "logs" / "latest.log").exists()
     assert len(list(library_dir.glob("*/*.md"))) == 1
+
+
+def test_pipeline_respects_export_formats_toggle(tmp_path: Path) -> None:
+    """
+    When export.formats is empty, pipeline still writes notes
+    but does not create BibTeX/RIS artifacts.
+    """
+    config_path = _write_config(tmp_path, arxiv_enabled=True)
+    # Disable all export formats for this run.
+    cfg = config_path.read_text(encoding="utf-8")
+    cfg = cfg.replace('formats: ["bibtex", "ris"]', "formats: []")
+    config_path.write_text(cfg, encoding="utf-8")
+
+    fake_paper = _paper("2403.12345", title="No Export Formats Paper")
+
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
+        result = pipeline_run(config_path)
+
+    assert len(result) == 1
+
+    library_dir = tmp_path / "library"
+    date_subdir = datetime.now().date().isoformat()
+    run_dir = library_dir / date_subdir
+    # One note is written for the paper (filename derived from safe_paper_id_for_path).
+    md_files = list(run_dir.glob("*.md"))
+    assert len(md_files) == 1
+    # BibTeX/RIS are not written when formats list is empty.
+    assert not any(run_dir.glob("*.bib"))
+    assert not any(run_dir.glob("*.ris"))
 
 
 def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tmp_path: Path) -> None:
