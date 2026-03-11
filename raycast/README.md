@@ -24,16 +24,12 @@ Early MVP. The API and behavior may change between versions.
 
 By default, the extension expects your Paper Agent project at:
 
-- `PROJECT_ROOT = "/Users/dominik/Desktop/paper"`
-- Library layout: `<PROJECT_ROOT>/library/<YYYY-MM-DD>/*.json`
+- Paper directory and config path (set in Raycast Preferences; no hardcoded path)
+- Library layout: `<paper_dir>/library/<YYYY-MM-DD>/*.json`
 
-If your Paper Agent project lives elsewhere, update `PROJECT_ROOT` in:
+If your Paper Agent project lives elsewhere, set **Config file path** and **Paper directory** in the extension Preferences (Raycast → Extensions → Paper Agent → Preferences).
 
-- `src/today-papers.tsx`
-- `src/recent-papers.tsx`
-- `src/search-papers.tsx`
-
-For **Recent Papers**, the number of days shown is controlled by the `RECENT_DAYS` constant in `src/recent-papers.tsx`.
+For **Recent Papers**, the limit is set in extension Preferences (Recent papers limit).
 
 ## Commands
 
