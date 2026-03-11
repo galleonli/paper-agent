@@ -49,10 +49,9 @@ def test_write_local_note(tmp_path: Path) -> None:
     assert metadata["abstract"] == "Abstract here."
     assert metadata["categories"] == ["cs.LG"]
     assert metadata["note_path"] == "library/2024-01-15/2301.12345.md"
-    # JSON mirrors the main content fields from the Markdown note.
     assert metadata["published"] == "2023-01-15"
-    assert metadata["summary"] in "Abstract here."
     assert metadata["why_this_paper"] == "Keyphrase matched"
+    assert "summary" not in metadata
 
 
 def test_write_daily_digest(tmp_path: Path) -> None:
@@ -116,7 +115,7 @@ def test_write_local_note_scholar_source_and_placeholder(tmp_path: Path) -> None
 
 
 def test_write_local_note_scholar_json_metadata(tmp_path: Path) -> None:
-    """Scholar JSON mirrors the note fields (no research summary, placeholder abstract/summary)."""
+    """Scholar JSON mirrors the note fields (no research summary, no summary field)."""
     r = RankedPaper(
         paper=Paper(
             id="scholar-xyz",
@@ -139,8 +138,6 @@ def test_write_local_note_scholar_json_metadata(tmp_path: Path) -> None:
     assert metadata["source"] == "scholar_alerts"
     assert metadata["published"] == "2025-01-03"
     assert metadata["abstract"] == "No abstract in alert email."
-    # Summary falls back to generic placeholder when no abstract/one-liner.
-    assert metadata["summary"] == "No summary available."
     assert metadata["why_this_paper"] == "From your Scholar Inbox."
-    # Scholar items never carry a research_summary section.
+    assert "summary" not in metadata
     assert "research_summary" not in metadata

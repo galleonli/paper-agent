@@ -17,6 +17,7 @@ from paper_agent.core.config import (
     ScholarAlertsSourceConfig,
     SourcesConfig,
 )
+from paper_agent.core.models import Paper
 from paper_agent.core.state import load_seen
 from paper_agent.sources import scholar_alerts_source
 
@@ -238,7 +239,8 @@ def test_html_email_with_exclude_keyword_does_not_drop_all(tmp_path: Path) -> No
     cfg = _base_config(tmp_path, eml_dir=str(eml_dir))
     cfg.sources.scholar_alerts.light_filter.exclude_keywords = ["manipulation"]
     now = datetime(2026, 3, 6, 12, 0, tzinfo=timezone.utc)
-    result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
+    with patch("paper_agent.sources.scholar_alerts_source.arxiv_source.fetch_arxiv_by_id", return_value=None):
+        result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
     assert len(result) == 1
     assert "Continual Learning with Sparse Experts" in result[0].title
 
@@ -285,6 +287,11 @@ def test_fetch_imap_provider_uses_env_password_and_parses_items(tmp_path: Path) 
     with (
         patch.dict(os.environ, {"IMAP_PASSWORD": "fake-app-password"}, clear=False),
         patch("paper_agent.sources.scholar_alerts_source.imaplib.IMAP4_SSL", _FakeIMAP),
+        patch("paper_agent.sources.scholar_alerts_source.arxiv_source.fetch_arxiv_by_id", return_value=None),
+        patch(
+            "paper_agent.sources.scholar_alerts_source._fetch_title_abstract_from_url",
+            return_value=(None, None),
+        ),
     ):
         result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
 
@@ -312,3 +319,86 @@ def test_fetch_imap_missing_env_password_returns_empty(tmp_path: Path) -> None:
         result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
 
     assert result == []
+
+
+def test_scholar_arxiv_enrichment_uses_full_abstract_when_fetch_returns_paper(tmp_path: Path) -> None:
+    """When fetch_arxiv_by_id returns a Paper, Scholar item gets full abstract and title from arXiv."""
+    eml_dir = tmp_path / "eml"
+    eml_dir.mkdir()
+    shutil.copy(FIXTURE_DIR / "sample_scholar_alert_html.eml", eml_dir / "a.eml")
+    cfg = _base_config(tmp_path, eml_dir=str(eml_dir))
+    cfg.sources.scholar_alerts.light_filter.exclude_keywords = ["manipulation"]
+    now = datetime(2026, 3, 6, 12, 0, tzinfo=timezone.utc)
+
+    enriched = Paper(
+        id="2602.00001",
+        title="Enriched Title From arXiv",
+        summary="Full abstract from arXiv API.",
+        authors=["Alice", "Bob"],
+        categories=["cs.LG"],
+        updated="2026-02-01T00:00:00Z",
+        link_abs="https://arxiv.org/abs/2602.00001",
+        link_pdf="https://arxiv.org/pdf/2602.00001.pdf",
+    )
+    with patch(
+        "paper_agent.sources.scholar_alerts_source.arxiv_source.fetch_arxiv_by_id",
+        return_value=enriched,
+    ):
+        result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
+
+    assert len(result) == 1
+    assert result[0].summary == "Full abstract from arXiv API."
+    assert result[0].title == "Enriched Title From arXiv"
+    assert result[0].authors == ["Alice", "Bob"]
+    assert result[0].link_pdf == "https://arxiv.org/pdf/2602.00001.pdf"
+
+
+def test_scholar_no_crash_when_arxiv_fetch_raises(tmp_path: Path) -> None:
+    """When fetch_arxiv_by_id raises, fetch still returns papers with snippet (no crash)."""
+    eml_dir = tmp_path / "eml"
+    eml_dir.mkdir()
+    shutil.copy(FIXTURE_DIR / "sample_scholar_alert_html.eml", eml_dir / "a.eml")
+    cfg = _base_config(tmp_path, eml_dir=str(eml_dir))
+    cfg.sources.scholar_alerts.light_filter.exclude_keywords = ["manipulation"]
+    now = datetime(2026, 3, 6, 12, 0, tzinfo=timezone.utc)
+
+    with patch(
+        "paper_agent.sources.scholar_alerts_source.arxiv_source.fetch_arxiv_by_id",
+        side_effect=RuntimeError("network error"),
+    ):
+        result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
+
+    assert len(result) == 1
+    assert "Continual Learning with Sparse Experts" in result[0].title
+    assert result[0].summary  # snippet from email; no crash
+
+
+def test_fetch_title_abstract_from_url_returns_none_for_invalid_url() -> None:
+    """Generic fetcher never raises; returns (None, None) for invalid or non-http URL."""
+    from paper_agent.sources.scholar_alerts_source import _fetch_title_abstract_from_url
+
+    assert _fetch_title_abstract_from_url("") == (None, None)
+    assert _fetch_title_abstract_from_url("not-a-url") == (None, None)
+    assert _fetch_title_abstract_from_url("ftp://example.com/x") == (None, None)
+
+
+def test_scholar_generic_fetch_enriches_non_arxiv_when_fetcher_returns_title_and_abstract(
+    tmp_path: Path,
+) -> None:
+    """When link is not arXiv, generic fetcher can enrich title/abstract; no crash when it fails."""
+    eml_dir = tmp_path / "eml"
+    eml_dir.mkdir()
+    shutil.copy(FIXTURE_DIR / "sample_scholar_alert_html.eml", eml_dir / "a.eml")
+    cfg = _base_config(tmp_path, eml_dir=str(eml_dir))
+    cfg.sources.scholar_alerts.light_filter.exclude_keywords = ["continual"]
+    now = datetime(2026, 3, 6, 12, 0, tzinfo=timezone.utc)
+
+    with patch(
+        "paper_agent.sources.scholar_alerts_source._fetch_title_abstract_from_url",
+        return_value=("Fetched Page Title", "Fetched abstract from page meta."),
+    ):
+        result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
+
+    assert len(result) == 1
+    assert "example.com" in result[0].link_abs
+    assert result[0].summary == "Fetched abstract from page meta."
