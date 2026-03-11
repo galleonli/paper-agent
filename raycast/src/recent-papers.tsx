@@ -1,10 +1,14 @@
 import { ActionPanel, List, Action } from "@raycast/api";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const PROJECT_ROOT = "/Users/dominik/Desktop/paper";
 const LIBRARY_DIR = path.join(PROJECT_ROOT, "library");
-const RECENT_DAYS = 3;
+const AGENT_ROOT = "/Users/dominik/Desktop/agents/daily-paper-agent";
+const CONFIG_PATH = path.join(AGENT_ROOT, "config.yaml");
+const PYTHON_BIN = path.join(AGENT_ROOT, ".venv", "bin", "python3");
+const DEFAULT_LIMIT = 30;
 
 type ResearchSummary = {
   heading?: string;
@@ -26,73 +30,58 @@ type Paper = {
   hasNote: boolean;
 };
 
-function getRecentDateStrings(): string[] {
-  const dates: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < RECENT_DAYS; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    dates.push(`${year}-${month}-${day}`);
+function loadRecentPapers(limit: number = DEFAULT_LIMIT): Paper[] {
+  let rawJson = "";
+  try {
+    rawJson = execFileSync(
+      PYTHON_BIN,
+      ["-m", "paper_agent", "list", "--json", "--limit", String(limit), "--config", CONFIG_PATH],
+      { cwd: AGENT_ROOT, encoding: "utf-8" }
+    );
+  } catch {
+    return [];
   }
-  return dates;
-}
 
-function loadPapersFromDateDir(dateStr: string): Paper[] {
-  const dateDir = path.join(LIBRARY_DIR, dateStr);
-  if (!fs.existsSync(dateDir)) return [];
+  let data: unknown;
+  try {
+    data = JSON.parse(rawJson);
+  } catch {
+    return [];
+  }
 
-  const files = fs.readdirSync(dateDir).filter((f) => f.endsWith(".json"));
-  const papers: Paper[] = [];
+  if (!Array.isArray(data)) {
+    return [];
+  }
 
-  for (const file of files) {
-    try {
-      const jsonPath = path.join(dateDir, file);
-      const raw = fs.readFileSync(jsonPath, "utf-8");
-      const data = JSON.parse(raw) as Record<string, unknown>;
-
-      const id = (data.id as string) ?? path.basename(file, ".json");
-      const rawNotePath = data.note_path as string | undefined;
+  return data
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+    .map((e) => {
+      const id = (e.id as string) ?? "";
+      const date = (e.date as string) ?? "";
+      const published = e.published as string | undefined;
+      const rawNotePath = e.note_path as string | undefined;
       const notePath = rawNotePath
         ? path.join(PROJECT_ROOT, rawNotePath)
-        : path.join(dateDir, `${path.basename(file, ".json")}.md`);
+        : path.join(LIBRARY_DIR, date || "unknown", `${id || "note"}.md`);
+      const rs = e.research_summary as Record<string, unknown> | undefined;
 
-      const rs = data.research_summary as Record<string, unknown> | undefined;
-      const published = data.published as string | undefined;
-      papers.push({
-        id,
-        date: dateStr,
-        title: (data.title as string) ?? "Untitled",
+      return {
+        id: id || path.basename(notePath, ".md"),
+        date,
+        title: (e.title as string) ?? "Untitled",
         published,
-        authors: data.authors as string[] | undefined,
-        abstract: data.abstract as string | undefined,
-        whyThisPaper: data.why_this_paper as string | undefined,
-        categories: data.categories as string[] | undefined,
+        authors: e.authors as string[] | undefined,
+        abstract: e.abstract as string | undefined,
+        whyThisPaper: e.why_this_paper as string | undefined,
+        categories: e.categories as string[] | undefined,
         researchSummary: rs
           ? { heading: rs.heading as string, body: rs.body as string }
           : undefined,
-        link: data.link as string | undefined,
+        link: e.link as string | undefined,
         notePath,
         hasNote: fs.existsSync(notePath),
-      });
-    } catch {
-      continue;
-    }
-  }
-
-  return papers;
-}
-
-function loadRecentPapers(): Paper[] {
-  const dateStrings = getRecentDateStrings();
-  const papers: Paper[] = [];
-  for (const dateStr of dateStrings) {
-    papers.push(...loadPapersFromDateDir(dateStr));
-  }
-  const sortKey = (p: Paper) => p.published ?? p.date;
-  return papers.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+      } satisfies Paper;
+    });
 }
 
 export default function Command() {
