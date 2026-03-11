@@ -20,7 +20,15 @@
       "type": "textfield",
       "title": "Config file path",
       "description": "Path to Paper Agent config.yaml (same file used by Config.py).",
-      "placeholder": "/path/to/your/daily-paper-agent/config.yaml",
+      "placeholder": "/path/to/your/paper-agent/config.yaml",
+      "default": ""
+    },
+    {
+      "name": "paperDir",
+      "type": "textfield",
+      "title": "Paper directory",
+      "description": "Root directory for papers (daily digest and notes). Library is stored under paper_dir/library. Maps to delivery.paper_dir.",
+      "placeholder": "/path/to/your/paper/repo",
       "default": ""
     },
     {
@@ -33,45 +41,88 @@
     },
     {
       "name": "recentLimit",
-      "type": "number",
+      "type": "textfield",
       "title": "Recent papers limit",
       "description": "Maximum number of papers shown in Recent Papers (used as --limit for the list CLI).",
-      "default": 30
+      "placeholder": "30",
+      "default": "30"
     },
     {
       "name": "maxPapersPerDay",
-      "type": "number",
+      "type": "textfield",
       "title": "Max papers per day",
       "description": "Maps to direction.max_papers_per_day in config.yaml.",
-      "default": 12
+      "placeholder": "12",
+      "default": "12"
     },
     {
       "name": "lookbackDays",
-      "type": "number",
+      "type": "textfield",
       "title": "Lookback days",
       "description": "Maps to direction.lookback_days (catch-up window).",
-      "default": 5
+      "placeholder": "5",
+      "default": "5"
     },
     {
       "name": "keyphrases",
       "type": "textfield",
       "title": "Interest keyphrases",
-      "description": "Comma-separated interest keyphrases (maps to interests.keyphrases).",
+      "description": "Comma-separated interest keyphrases (maps to direction.include_keywords).",
       "placeholder": "continual learning, lifelong learning, incremental learning",
+      "default": ""
+    },
+    {
+      "name": "allowCategories",
+      "type": "textfield",
+      "title": "Allow categories",
+      "description": "Comma-separated arXiv categories to include (maps to direction.allow_categories).",
+      "placeholder": "cs.LG, cs.AI",
+      "default": "cs.LG, cs.AI, cs.CL, stat.ML, cs.CV"
+    },
+    {
+      "name": "denyCategories",
+      "type": "textfield",
+      "title": "Deny categories",
+      "description": "Comma-separated categories to exclude (maps to direction.deny_categories).",
+      "placeholder": "stat.ML",
+      "default": ""
+    },
+    {
+      "name": "excludeKeywords",
+      "type": "textfield",
+      "title": "Exclude keywords",
+      "description": "Comma-separated keywords; papers matching these are excluded (maps to direction.exclude_keywords).",
+      "placeholder": "survey, tutorial, point cloud",
       "default": ""
     },
     {
       "name": "summarizeEnabled",
       "type": "checkbox",
       "title": "Enable LLM research summary",
-      "description": "Toggles summarize.enabled in config.yaml.",
+      "description": "When on, the three options below are used to generate research summaries. When off, they are ignored.",
       "default": true
+    },
+    {
+      "name": "summarizeProvider",
+      "type": "textfield",
+      "title": "Summary provider",
+      "description": "Only used when \"Enable LLM research summary\" is on. LLM provider (e.g. openai).",
+      "placeholder": "openai",
+      "default": "openai"
+    },
+    {
+      "name": "summarizeModel",
+      "type": "textfield",
+      "title": "Summary model",
+      "description": "Only used when \"Enable LLM research summary\" is on. Model name (e.g. gpt-4o-mini).",
+      "placeholder": "gpt-4o-mini",
+      "default": "gpt-4o-mini"
     },
     {
       "name": "summarizeLanguage",
       "type": "dropdown",
       "title": "Summary language",
-      "description": "Maps to summarize.language.",
+      "description": "Only used when \"Enable LLM research summary\" is on. Maps to summarize.language.",
       "data": [
         { "title": "English", "value": "en" },
         { "title": "Chinese", "value": "zh" },

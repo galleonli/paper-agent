@@ -1,13 +1,19 @@
-import { ActionPanel, List, Action } from "@raycast/api";
+import { ActionPanel, List, Action, getPreferenceValues } from "@raycast/api";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const PROJECT_ROOT = "/Users/dominik/Desktop/paper";
-const LIBRARY_DIR = path.join(PROJECT_ROOT, "library");
-const AGENT_ROOT = "/Users/dominik/Desktop/agents/daily-paper-agent";
-const CONFIG_PATH = path.join(AGENT_ROOT, "config.yaml");
-const PYTHON_BIN = path.join(AGENT_ROOT, ".venv", "bin", "python3");
+const prefs = getPreferenceValues<Preferences.TodayPapers>();
+const CONFIG_PATH = prefs.configPath?.trim() ?? "";
+const HAS_CONFIG = CONFIG_PATH.length > 0;
+const PAPER_DIR = prefs.paperDir?.trim() ?? "";
+const HAS_PAPER_DIR = PAPER_DIR.length > 0;
+const LIBRARY_DIR = path.join(PAPER_DIR, "library");
+const AGENT_ROOT = HAS_CONFIG ? path.dirname(CONFIG_PATH) : "";
+const PYTHON_BIN =
+  prefs.pythonPath && prefs.pythonPath.trim().length > 0
+    ? prefs.pythonPath
+    : path.join(AGENT_ROOT, ".venv", "bin", "python3");
 
 type ResearchSummary = {
   heading?: string;
@@ -38,6 +44,10 @@ function getTodayDateString(): string {
 }
 
 function loadTodayPapers(): Paper[] {
+  if (!HAS_CONFIG || !HAS_PAPER_DIR) {
+    return [];
+  }
+
   let rawJson = "";
   try {
     rawJson = execFileSync(
@@ -71,7 +81,7 @@ function loadTodayPapers(): Paper[] {
       const published = e.published as string | undefined;
       const rawNotePath = e.note_path as string | undefined;
       const notePath = rawNotePath
-        ? path.join(PROJECT_ROOT, rawNotePath)
+        ? path.join(PAPER_DIR, rawNotePath)
         : path.join(LIBRARY_DIR, date, `${id || "note"}.md`);
       const rs = e.research_summary as Record<string, unknown> | undefined;
 
@@ -95,6 +105,17 @@ function loadTodayPapers(): Paper[] {
 }
 
 export default function Command() {
+  if (!HAS_CONFIG || !HAS_PAPER_DIR) {
+    return (
+      <List>
+        <List.EmptyView
+          title="Set preferences first"
+          description="Open extension preferences and set both 'Config file path' and 'Paper directory' (delivery.paper_dir)."
+        />
+      </List>
+    );
+  }
+
   const papers = loadTodayPapers();
 
   return (
