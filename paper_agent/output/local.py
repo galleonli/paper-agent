@@ -1,6 +1,6 @@
 """
 Local output: per-paper notes in library_dir and daily digest in daily_dir.
-Contract: library/YYYY-MM-DD/{arxiv_id}.md (Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Summary);
+Contract: library/YYYY-MM-DD/{arxiv_id}.md (Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Why this paper, optional Research summary);
 daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
 
@@ -14,15 +14,6 @@ from paper_agent.core.utils import safe_paper_id_for_path
 from paper_agent.filter_papers import RankedPaper
 
 
-def _brief_summary_for_note(paper: Paper, one_liner: Optional[str] = None) -> str:
-    """Summary section: use provided one-liner or first 300 chars of abstract."""
-    if one_liner and one_liner.strip():
-        return one_liner.strip()
-    if paper.summary:
-        return (paper.summary[:300] + "…") if len(paper.summary) > 300 else paper.summary
-    return "No summary available."
-
-
 def _paper_metadata(
     *,
     paper: Paper,
@@ -31,7 +22,6 @@ def _paper_metadata(
     source: str,
     published: str,
     abstract_body: str,
-    summary_text: str,
     why: str,
     research_summary: Optional[tuple[str, str]],
 ) -> dict[str, object]:
@@ -39,7 +29,7 @@ def _paper_metadata(
     Build JSON metadata that mirrors the Markdown note content.
 
     This function reuses the same derived strings used for the Markdown body, so
-    JSON stays consistent even if summary/why/research sections change upstream.
+    JSON stays consistent even if why/research sections change upstream.
     """
     data: dict[str, object] = {
         "id": paper.id,
@@ -50,7 +40,6 @@ def _paper_metadata(
         "link": paper.link_abs,
         "published": published,
         "abstract": abstract_body,
-        "summary": summary_text,
         "why_this_paper": why,
         "categories": paper.categories or [],
         "note_path": f"library/{run_date.isoformat()}/{note_name}.md",
@@ -74,7 +63,7 @@ def write_local_note(
 ) -> Path:
     """
     Write one markdown note to library_dir/YYYY-MM-DD/{arxiv_id}.md.
-    Header: Title, arXiv ID, Published, Authors, Link, Categories; then Abstract; then Summary.
+    Header: Title, arXiv ID, Published, Authors, Link, Categories; then Abstract; then Why this paper (and optional Research summary).
     """
     paper = ranked.paper
     run_subdir = Path(library_dir) / run_date.isoformat()
@@ -84,7 +73,6 @@ def write_local_note(
     metadata_path = run_subdir / f"{name}.json"
 
     why = ranked.why_this_paper or "—"
-    summary_text = _brief_summary_for_note(paper, brief_one_liner)
     authors_str = "; ".join(paper.authors) if paper.authors else "—"
     cats_str = ", ".join(paper.categories) if paper.categories else "—"
     published = (
@@ -120,10 +108,6 @@ def write_local_note(
 
 {abstract_body}
 
-## Summary
-
-{summary_text}
-
 ## Why this paper
 
 {why}{research_section}
@@ -141,7 +125,6 @@ def write_local_note(
         source=source_str,
         published=published,
         abstract_body=abstract_body,
-        summary_text=summary_text,
         why=why,
         research_summary=research_summary,
     )

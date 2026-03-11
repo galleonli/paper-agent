@@ -15,6 +15,8 @@ import imaplib
 import os
 import re
 from dataclasses import dataclass
+
+import requests
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -24,6 +26,7 @@ from pathlib import Path
 from paper_agent.core.config import Config
 from paper_agent.core.models import Paper
 from paper_agent.core.state import filter_unseen, load_seen, save_seen
+from paper_agent.sources import arxiv as arxiv_source
 
 
 SCHOLAR_NS = "scholar:"
@@ -434,6 +437,51 @@ def _raw_items_from_source(config: Config) -> list[_RawItem]:
     return all_items
 
 
+def _fetch_title_abstract_from_url(
+    url: str,
+    timeout_seconds: int = 5,
+) -> tuple[str | None, str | None]:
+    """
+    Best-effort fetch of page title and abstract (meta description or og:description).
+    Returns (title, abstract) or (None, None) on any failure; never raises.
+    """
+    if not (url or "").strip().startswith("http"):
+        return (None, None)
+    try:
+        resp = requests.get(
+            url.strip(),
+            timeout=timeout_seconds,
+            headers={"User-Agent": "PaperAgent/1.0 (paper inbox)"},
+        )
+        resp.raise_for_status()
+        text = resp.text or ""
+    except Exception:
+        return (None, None)
+    title: str | None = None
+    abstract: str | None = None
+    title_m = re.search(r"<title[^>]*>([^<]+)</title>", text, re.I | re.DOTALL)
+    if title_m:
+        title = html.unescape(title_m.group(1)).strip()
+        if title:
+            title = title[:2000]
+    desc_m = re.search(
+        r'<meta[^>]+(?:name|property)=["\'](?:description|og:description)["\'][^>]+content=["\']([^"\']+)["\']',
+        text,
+        re.I,
+    )
+    if not desc_m:
+        desc_m = re.search(
+            r'content=["\']([^"\']+)["\'][^>]+(?:name|property)=["\'](?:description|og:description)["\']',
+            text,
+            re.I,
+        )
+    if desc_m:
+        abstract = html.unescape(desc_m.group(1)).strip()
+        if abstract:
+            abstract = abstract[:5000]
+    return (title, abstract)
+
+
 def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
     """
     Fetch papers from Scholar Alerts email (mbox or eml_dir).
@@ -461,7 +509,7 @@ def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
     raw_items.sort(key=lambda it: it.received_ts or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     raw_items = raw_items[: sa.max_items_per_run]
 
-    # Build Papers with namespaced IDs
+    # Build Papers with namespaced IDs; enrich from arXiv or generic fetch when possible; never crash
     papers: list[Paper] = []
     for it in raw_items:
         derived = _stable_paper_id(it.link)
@@ -471,16 +519,46 @@ def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
             if it.received_ts
             else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
+        title = it.title or "Scholar Alert"
+        summary = it.snippet
+        authors = it.authors
+        categories: list[str] = []
+        link_pdf = None
+
+        arxiv_id = _extract_arxiv_id(it.link)
+        if arxiv_id:
+            try:
+                full = arxiv_source.fetch_arxiv_by_id(arxiv_id)
+                if full is not None:
+                    title = full.title
+                    summary = full.summary or it.snippet
+                    authors = full.authors or authors
+                    categories = full.categories or []
+                    updated_iso = full.updated or updated_iso
+                    link_pdf = full.link_pdf
+            except Exception:
+                pass  # keep snippet; do not block
+
+        if not summary or summary == it.snippet:
+            try:
+                fetched_title, fetched_abstract = _fetch_title_abstract_from_url(it.link)
+                if fetched_abstract:
+                    summary = fetched_abstract
+                if fetched_title and (not title or title == "Scholar Alert"):
+                    title = fetched_title
+            except Exception:
+                pass
+
         papers.append(
             Paper(
                 id=paper_id,
-                title=it.title or "Scholar Alert",
-                summary=it.snippet,
-                authors=it.authors,
-                categories=[],
+                title=title,
+                summary=summary,
+                authors=authors,
+                categories=categories,
                 updated=updated_iso,
                 link_abs=it.link,
-                link_pdf=None,
+                link_pdf=link_pdf,
             )
         )
 

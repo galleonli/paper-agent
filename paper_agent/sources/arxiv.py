@@ -33,6 +33,32 @@ def _extract_id_from_abs_url(url: str) -> str:
     return m.group(1) if m else url
 
 
+def fetch_arxiv_by_id(
+    arxiv_id: str,
+    timeout_seconds: int = 10,
+) -> Paper | None:
+    """
+    Fetch a single paper by arXiv ID (e.g. 2301.12345) via the Atom API.
+    Returns full Paper with abstract, authors, categories; or None on failure.
+    """
+    if not (arxiv_id or "").strip():
+        return None
+    arxiv_id = arxiv_id.strip()
+    params = {"id_list": arxiv_id}
+    url = f"{ARXiv_API_BASE}?{urlencode(params)}"
+    try:
+        resp = requests.get(url, timeout=timeout_seconds)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return None
+    root = ET.fromstring(resp.content)
+    ns = {"atom": ATOM_NS}
+    entries = root.findall("atom:entry", ns)
+    if not entries:
+        return None
+    return _parse_entry(entries[0])
+
+
 def _parse_entry(entry: ET.Element) -> Paper | None:
     """Parse one Atom <entry> into Paper. Returns None if required fields missing."""
     ns = {"atom": ATOM_NS, "arxiv": ARXIV_NS}
