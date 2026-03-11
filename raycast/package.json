@@ -14,6 +14,80 @@
     "Productivity"
   ],
   "license": "MIT",
+  "preferences": [
+    {
+      "name": "configPath",
+      "type": "textfield",
+      "title": "Config file path",
+      "description": "Path to Paper Agent config.yaml (same file used by Config.py).",
+      "placeholder": "/path/to/your/daily-paper-agent/config.yaml",
+      "default": ""
+    },
+    {
+      "name": "pythonPath",
+      "type": "textfield",
+      "title": "Python executable",
+      "description": "Optional override for Python binary (defaults to .venv/bin/python3 in the Paper Agent repo).",
+      "placeholder": "/Users/you/.venv/bin/python3",
+      "default": ""
+    },
+    {
+      "name": "recentLimit",
+      "type": "number",
+      "title": "Recent papers limit",
+      "description": "Maximum number of papers shown in Recent Papers (used as --limit for the list CLI).",
+      "default": 30
+    },
+    {
+      "name": "maxPapersPerDay",
+      "type": "number",
+      "title": "Max papers per day",
+      "description": "Maps to direction.max_papers_per_day in config.yaml.",
+      "default": 12
+    },
+    {
+      "name": "lookbackDays",
+      "type": "number",
+      "title": "Lookback days",
+      "description": "Maps to direction.lookback_days (catch-up window).",
+      "default": 5
+    },
+    {
+      "name": "keyphrases",
+      "type": "textfield",
+      "title": "Interest keyphrases",
+      "description": "Comma-separated interest keyphrases (maps to interests.keyphrases).",
+      "placeholder": "continual learning, lifelong learning, incremental learning",
+      "default": ""
+    },
+    {
+      "name": "summarizeEnabled",
+      "type": "checkbox",
+      "title": "Enable LLM research summary",
+      "description": "Toggles summarize.enabled in config.yaml.",
+      "default": true
+    },
+    {
+      "name": "summarizeLanguage",
+      "type": "dropdown",
+      "title": "Summary language",
+      "description": "Maps to summarize.language.",
+      "data": [
+        { "title": "English", "value": "en" },
+        { "title": "Chinese", "value": "zh" },
+        { "title": "Japanese", "value": "ja" },
+        { "title": "German", "value": "de" }
+      ],
+      "default": "en"
+    },
+    {
+      "name": "scholarEnabled",
+      "type": "checkbox",
+      "title": "Enable Scholar Inbox",
+      "description": "Toggles sources.scholar_alerts.enabled in config.yaml.",
+      "default": true
+    }
+  ],
   "commands": [
     {
       "name": "today-papers",
