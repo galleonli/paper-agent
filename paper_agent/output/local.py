@@ -1,5 +1,5 @@
 """
-Local output: per-paper notes in library_dir and daily digest in daily_dir.
+Local output: per-paper notes in library_dir and daily digest in paper_dir.
 Contract: library/YYYY-MM-DD/{arxiv_id}.md (Title, arXiv ID, Published, Authors, Link, Categories, Abstract, Why this paper, optional Research summary);
 daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
@@ -138,17 +138,17 @@ def write_local_note(
 def write_daily_digest(
     discovery: list[RankedPaper],
     scholar_inbox: list[RankedPaper],
-    daily_dir: str | Path,
+    paper_dir: str | Path,
     run_date: date,
 ) -> Path:
     """
-    Write daily digest to daily_dir/YYYY-MM-DD.md (single file per day).
+    Write daily digest to paper_dir/YYYY-MM-DD.md (single file per day).
     Sections:
     - Daily Precision: discovery feed (capped by max_papers_per_day).
     - Scholar Inbox: Scholar Alerts items (uncapped or max_items_per_run capped).
     """
-    Path(daily_dir).mkdir(parents=True, exist_ok=True)
-    path = Path(daily_dir) / f"{run_date.isoformat()}.md"
+    Path(paper_dir).mkdir(parents=True, exist_ok=True)
+    path = Path(paper_dir) / f"{run_date.isoformat()}.md"
 
     total = len(discovery) + len(scholar_inbox)
     lines: list[str] = [

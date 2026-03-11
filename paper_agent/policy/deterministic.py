@@ -15,10 +15,9 @@ class DeterministicPolicy:
 
     def score(self, papers: list[Paper], context: PolicyContext) -> list[ScoredPaper]:
         config = context.config
-        interests = config.interests
         feedback = config.feedback
-        keyphrases = [k for k in interests.keyphrases if k]
-        seeds = [s for s in interests.seeds if s]
+        keyphrases = [k for k in config.direction.include_keywords if k]
+        seeds = [s for s in config.interests.seeds if s]
         blocked_phrases = [p for p in feedback.blocked_phrases if p]
         blocked_authors = [a for a in feedback.blocked_authors if a]
         boosted_phrases = [p for p in feedback.boosted_phrases if p]

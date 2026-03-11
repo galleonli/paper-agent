@@ -11,15 +11,13 @@ Schema and default values are aligned with config.example.yaml:
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class InterestsConfig(BaseModel):
-    """Interest model: seeds, keyphrases, negative_keyphrases."""
+    """Interest model: seeds only. Keyphrases/negative use direction.include_keywords / direction.exclude_keywords."""
 
     seeds: list[str] = Field(default_factory=list, description="Paper URLs/IDs that define your taste")
-    keyphrases: list[str] = Field(default_factory=list, description="Phrases that align with your interests")
-    negative_keyphrases: list[str] = Field(default_factory=list, description="Phrases that exclude papers")
 
 
 class DirectionConfig(BaseModel):
@@ -32,40 +30,30 @@ class DirectionConfig(BaseModel):
     queries: list[str] = Field(default_factory=list)
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
-    exclude_authors: list[str] = Field(default_factory=list)
-
-
-class SlackConfig(BaseModel):
-    """Slack delivery options."""
-
-    enabled: bool = False
-    webhook_url: str = Field(default="", description="Set in config or env; never commit real URL")
-    max_message_chars: int = Field(default=10000, ge=100, le=50000)
-    show_brief_summary: bool = True
 
 
 class DeliveryConfig(BaseModel):
-    """Delivery and output directories."""
+    """Delivery and output directories. If library_dir is empty, it is derived as paper_dir/library."""
 
-    slack: SlackConfig = Field(default_factory=SlackConfig)
-    library_dir: str = "./library"
-    daily_dir: str = "./daily"
+    library_dir: str = Field(default="", description="Per-paper notes under library_dir/YYYY-MM-DD; default derived from paper_dir")
+    paper_dir: str = "./paper"
     state_dir: str = "./state"
     logs_dir: str = "./logs"
 
+    @model_validator(mode="after")
+    def default_library_dir_under_paper(self) -> "DeliveryConfig":
+        if not (self.library_dir or "").strip():
+            self.library_dir = str(Path(self.paper_dir or ".") / "library")
+        return self
+
 
 class SummarizeConfig(BaseModel):
-    """Summarization options (provider/model; brief one-liner + research notes)."""
+    """Single switch: LLM research summary. When enabled, use provider/model/language."""
 
     enabled: bool = True
     provider: str = "openai"
     model: str = "gpt-4o-mini"
-    brief_summary: bool = True
-    brief_one_liner_enabled: bool = True
-    # Language for LLM-generated content in notes/Slack (“en”, “zh”, etc.).
-    language: str = "en"
-    # Whether to generate a research-focused structured summary for local notes.
-    research_summary_enabled: bool = True
+    language: str = Field(default="en", description="LLM output language: en, zh, etc.")
 
 
 class PromptsConfig(BaseModel):
@@ -192,7 +180,6 @@ class ScholarAlertsLightFilterConfig(BaseModel):
 
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
-    exclude_authors: list[str] = Field(default_factory=list)
 
 
 class ScholarAlertsEmailConfig(BaseModel):
@@ -244,7 +231,6 @@ class ScholarAlertsSourceConfig(BaseModel):
         le=1000,
         description="Cap on Scholar Inbox items processed per run.",
     )
-    push_to_slack: bool = True
     light_filter: ScholarAlertsLightFilterConfig = Field(
         default_factory=ScholarAlertsLightFilterConfig,
         description="Light filters applied only to Scholar Inbox items.",

@@ -1,5 +1,3 @@
-# Delivery channels (Slack, future: email, etc.)
+# Delivery channels (placeholder for future channels)
 
-from paper_agent.deliver.slack import send_slack_brief
-
-__all__ = ["send_slack_brief"]
+__all__ = []

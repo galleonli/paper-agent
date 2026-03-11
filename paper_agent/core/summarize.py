@@ -91,7 +91,7 @@ def _build_research_prompt(paper: Paper, why: str | None, config: Config) -> str
     """Construct the research-structured prompt for the LLM."""
     language_name, _ = _detect_language_label(config.summarize.language)
 
-    keyphrases = ", ".join(config.interests.keyphrases) or "N/A"
+    keyphrases = ", ".join(config.direction.include_keywords) or "N/A"
     include_kw = ", ".join(config.direction.include_keywords) or "N/A"
     categories = ", ".join(paper.categories) or "N/A"
     why_text = why or "—"
@@ -184,11 +184,6 @@ def build_research_summary(paper: Paper, why: str | None, config: Config) -> Opt
     """
     summ_cfg = config.summarize
     if not getattr(summ_cfg, "enabled", True):
-        return None
-
-    # Optional separate switch so users can enable one-liner for Slack but
-    # turn off research summaries, and vice versa.
-    if not getattr(summ_cfg, "research_summary_enabled", True):
         return None
 
     language_name, heading = _detect_language_label(summ_cfg.language)

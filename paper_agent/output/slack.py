@@ -1,5 +1,0 @@
-# Backward compatibility: re-export from deliver
-
-from paper_agent.deliver.slack import send_slack_brief
-
-__all__ = ["send_slack_brief"]

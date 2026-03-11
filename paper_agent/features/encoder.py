@@ -8,9 +8,9 @@ from paper_agent.core.utils import normalize_text
 
 
 def get_feature_names(config: Config) -> list[str]:
-    """Canonical order: bias, keyphrases, allow_categories. Determines dimension d."""
+    """Canonical order: bias, keyphrases (from direction.include_keywords), allow_categories. Determines dimension d."""
     names = ["bias"]
-    names.extend(normalize_text(k) for k in config.interests.keyphrases if k)
+    names.extend(normalize_text(k) for k in config.direction.include_keywords if k)
     names.extend(normalize_text(c) for c in config.direction.allow_categories if c)
     if len(names) == 1:
         names.append("default")
@@ -23,7 +23,7 @@ def encode_paper(paper: Paper, config: Config) -> tuple[list[float], list[str], 
     x = [bias=1, ...keyphrase binaries..., ...category binaries...].
     matched_phrases = keyphrase strings (original) that appeared in title+summary (for why_this_paper).
     """
-    keyphrases_norm = [normalize_text(k) for k in config.interests.keyphrases if k]
+    keyphrases_norm = [normalize_text(k) for k in config.direction.include_keywords if k]
     categories_norm = [normalize_text(c) for c in config.direction.allow_categories if c]
     names = get_feature_names(config)
 
@@ -39,7 +39,7 @@ def encode_paper(paper: Paper, config: Config) -> tuple[list[float], list[str], 
         x.append(1.0)  # default slot
 
     matched_phrases = [
-        orig for orig in config.interests.keyphrases
+        orig for orig in config.direction.include_keywords
         if orig and normalize_text(orig) in combined
     ]
     return x, names, matched_phrases

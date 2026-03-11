@@ -22,53 +22,34 @@ direction:
   queries: []
   include_keywords: []
   exclude_keywords: []
-  exclude_authors: []
 
 # -----------------------------------------------------------------------------
-# Interest model: seeds, keyphrases, negative_keyphrases
+# Interest model: seeds only (keyphrases/negative use direction.include_keywords / exclude_keywords)
 # -----------------------------------------------------------------------------
 interests:
   seeds:
     - "https://arxiv.org/abs/2301.12345"
     - "arXiv:2302.00001"
-  keyphrases:
-    - "contrastive learning"
-    - "protein structure prediction"
-  negative_keyphrases: []
 
-# -----------------------------------------------------------------------------
-# Slack: brief digest only (title + one-liner + why_this_paper + links)
-# -----------------------------------------------------------------------------
 delivery:
-  slack:
-    enabled: false
-    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/PLACEHOLDER"
-    max_message_chars: 10000
-    show_brief_summary: true
-  library_dir: "./library"
-  daily_dir: "./daily"
+  paper_dir: "/path/to/your/paper/repo"
   state_dir: "./state"
   logs_dir: "./logs"
 
 # -----------------------------------------------------------------------------
-# Summarization (optional; v0.1 uses abstract snippet if no provider)
+# Summarization: single switch (LLM research summary). If enabled, set provider/model/language.
 # -----------------------------------------------------------------------------
 summarize:
   enabled: true
   provider: "openai"
   model: "gpt-4o-mini"
-  brief_summary: true
-  brief_one_liner_enabled: true
-  # Language for LLM-generated content in notes/Slack ("en", "zh", etc.).
   language: "en"
-  # Whether to generate a research-focused structured summary section in notes.
-  research_summary_enabled: true
 
 # -----------------------------------------------------------------------------
 # Export: BibTeX and RIS (EndNote-compatible)
 # -----------------------------------------------------------------------------
 export:
-  formats: ["bibtex", "ris"]
+  formats: [] # ["bibtex", "ris"]
 
 # -----------------------------------------------------------------------------
 # Sources: arXiv (discovery) + Scholar Inbox (email only; no RSS, no crawling)
@@ -91,12 +72,10 @@ sources:
       eml_dir: ""                # directory of .eml files (when provider=eml_dir)
       from_addresses: ["scholaralerts-noreply@google.com"]  # optional filter; can be empty []
     max_items_per_run: 200
-    push_to_slack: true
     ordering: "arrival"          # only arrival for email inbox semantics
     light_filter:
       include_keywords: []
       exclude_keywords: []
-      exclude_authors: []
     # NOTE: do NOT add count_toward_daily_limit or participate_in_constraints.
 
 # -----------------------------------------------------------------------------

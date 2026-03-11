@@ -39,14 +39,12 @@ sources:
       eml_dir: ""
       from_addresses: []
     max_items_per_run: 200
-    push_to_slack: true
     ordering: "arrival"
     light_filter:
       include_keywords: []
       exclude_keywords:
         - "point cloud"
         - "survey"
-      exclude_authors: []
 ```
 
 | Field | Description |
@@ -60,7 +58,7 @@ sources:
 | `email.gmail_label` | Gmail label to read from (e.g. `scholar-alerts`). If the label does not exist or select fails, the agent falls back to `INBOX`. Create the label in Gmail and apply it to Scholar Alert emails for best results. |
 | `max_items_per_run` | Cap on Scholar items processed per run (default 200). |
 | `ordering` | Recommended: `"arrival"` (email received time, descending). Scholar Inbox is designed as an inbox feed rather than a publication-time ranking feed. |
-| `light_filter` | `include_keywords`, `exclude_keywords`, `exclude_authors`—applied only to Scholar Inbox items. |
+| `light_filter` | `include_keywords`, `exclude_keywords`—applied only to Scholar Inbox items. |
 
 `from_addresses` is optional. Leave it empty at first, then tighten it after confirming the actual sender address of your Scholar Alert emails.
 
@@ -71,7 +69,7 @@ sources:
 - **Scholar Inbox does NOT count toward `max_papers_per_day`.** The discovery feed (arXiv) is capped separately; Scholar items are bounded only by `max_items_per_run`.
 - **Scholar Inbox does NOT participate in exploration/diversity constraints.** No bandit scoring, topic caps, or min-topics; it is a separate feed.
 - **Scholar Inbox is ordered by arrival time** (email received time, descending).
-- **Scholar Inbox uses only light filtering** (`sources.scholar_alerts.light_filter.include_keywords`, `sources.scholar_alerts.light_filter.exclude_keywords`, `sources.scholar_alerts.light_filter.exclude_authors`).
+- **Scholar Inbox uses only light filtering** (`sources.scholar_alerts.light_filter.include_keywords`, `sources.scholar_alerts.light_filter.exclude_keywords`).
 
 ---
 
@@ -93,7 +91,6 @@ sources:
    - `daily/YYYY-MM-DD.md` contains a **Scholar Inbox** section with items
    - `logs/latest.log` shows `scholar_provider=imap` and `scholar_new=N` (N > 0 if you have new alerts)
    - `library/YYYY-MM-DD/` contains notes for Scholar items (IDs prefixed with `scholar:`)
-   - If Slack is enabled: Scholar items appear in the Slack brief when `push_to_slack: true`
 
 ---
 

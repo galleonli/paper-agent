@@ -5,7 +5,7 @@
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
 *Discover relevant arXiv papers with explainable, interest-aware selection (instead of raw keyword matching).
-Keep Google Scholar Alert emails in a separate inbox, then write local notes, Slack digests, and BibTeX/RIS exports.*
+Keep Google Scholar Alert emails in a separate inbox, then write local notes, daily digests, and BibTeX/RIS exports.*
 
 [**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Google Scholar setup**](#google-scholar-setup) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
 
@@ -16,7 +16,6 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, Sl
 [![arXiv](https://img.shields.io/badge/arXiv-API-orange.svg)](https://arxiv.org/help/api)
 [![YAML](https://img.shields.io/badge/config-YAML-red.svg)](config.example.yaml)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-✓-green.svg)](#key-features)
-[![Slack](https://img.shields.io/badge/Slack-optional-4A154B?logo=slack)](https://slack.com/)
 [![BibTeX / RIS](https://img.shields.io/badge/export-BibTeX%20%7C%20RIS-00599C.svg)](#output-artifacts)
 
 </div>
@@ -28,7 +27,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, Sl
 - **Daily Precision (arXiv):** Interest-aware ranking with explainable signals, plus optional exploration/diversity controls.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
-- **Workflow-friendly outputs:** Generate local notes, daily digests, optional Slack summaries, and BibTeX/RIS exports.
+- **Workflow-friendly outputs:** Generate local notes, daily digests, and BibTeX/RIS exports.
 
 ---
 
@@ -48,7 +47,6 @@ Edit `config.yaml` at minimum:
 
 - `interests.keyphrases`
 - `direction.queries`
-- optional `delivery.slack.webhook_url`
 - optional `sources.scholar_alerts.*`
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
@@ -119,9 +117,8 @@ Copy `config.example.yaml` to `config.yaml`. Main knobs:
 |------|--------|
 | **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
 | **Direction (scope)** | `direction.lookback_days` applies to both discovery and Scholar Inbox (arrival window for Scholar); `direction.max_papers_per_day` and `direction.allow_categories` / `direction.deny_categories` / `direction.queries` / `direction.include_keywords` / `direction.exclude_keywords` / `direction.exclude_authors` apply to discovery only |
-| **Slack** | `delivery.slack.enabled`, `delivery.slack.webhook_url`, `delivery.slack.max_message_chars` |
-| **Summarization** | `summarize.enabled`, `summarize.provider`, `summarize.model`, `summarize.language`, `summarize.brief_one_liner_enabled`, `summarize.research_summary_enabled`; optional advanced prompt override at `prompts.research_summary_template`; for OpenAI, set `OPENAI_API_KEY` in the environment rather than storing it in `config.yaml` |
-| **Output paths** | `delivery.library_dir`, `delivery.daily_dir`, `delivery.state_dir`, `delivery.logs_dir` |
+| **Summarization** | Single switch: `summarize.enabled` (LLM research summary). When on, set `summarize.provider`, `summarize.model`, `summarize.language`. Optional prompt override at `prompts.research_summary_template`. For OpenAI, set `OPENAI_API_KEY` in the environment. |
+| **Output paths** | `delivery.library_dir`, `delivery.paper_dir`, `delivery.state_dir`, `delivery.logs_dir` |
 | **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
 | **Scholar email source** | `sources.scholar_alerts.email.mbox_path`, `sources.scholar_alerts.email.eml_dir`, or IMAP keys `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, `sources.scholar_alerts.email.imap_password_env`, `sources.scholar_alerts.email.gmail_label` |
 | **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics`; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
@@ -142,7 +139,7 @@ python -m paper_agent run --config config.yaml
 If you do **not** use AI summarization:
 
 - You do **not** need to set `OPENAI_API_KEY`.
-- The pipeline still writes notes, digest, exports, logs, and optional Slack output.
+- The pipeline still writes notes, digest, exports, and logs.
 - Notes use the abstract (or snippet from the source); the optional `Research-focused summary` section is simply omitted.
 
 If you want to customize the research-summary prompt, leave the built-in default as-is or override it with `prompts.research_summary_template` near the end of `config.yaml`.
@@ -213,7 +210,7 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
   `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `fetched_total`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`. Inspect this first when something looks wrong.
 
 - **Second run still shows new papers / duplicates?**  
-  Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Use the same `library_dir` and `daily_dir` across runs. If you changed the repo path or run from a different working directory, state may not be found and papers can be treated as new again.
+  Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Use the same `library_dir` and `paper_dir` across runs. If you changed the repo path or run from a different working directory, state may not be found and papers can be treated as new again.
 
 ### Config and startup
 
@@ -222,11 +219,6 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 - **No discovery papers at all (arXiv)?**  
   Check: (1) `direction.allow_categories` or `direction.queries` — at least one must yield results. (2) `direction.lookback_days` — papers are filtered by update date within this window. (3) `interests.keyphrases` — if non-empty, each paper needs at least one keyphrase match or seed match to pass. Relax filters or add keyphrases and re-run.
-
-### Slack
-
-- **Slack not sending?**  
-  Check `delivery.slack.enabled` and `delivery.slack.webhook_url`. Use a valid Slack Incoming Webhook URL. If the webhook fails, the run still writes local notes, digest, and exports and marks papers seen; Slack is best-effort and is not retried on the next run.
 
 ### Scholar Inbox
 
@@ -247,7 +239,7 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 ### Cron / scheduling
 
 - **Cron job does not run or runs at wrong time?**  
-  Set `CRON_TZ` to your timezone (e.g. `CRON_TZ=Europe/Berlin`). Use the full path to the repo and to the venv Python in the cron line. Ensure the user running cron has read access to the repo and write access to `state_dir`, `library_dir`, `daily_dir`, and `logs_dir`.
+  Set `CRON_TZ` to your timezone (e.g. `CRON_TZ=Europe/Berlin`). Use the full path to the repo and to the venv Python in the cron line. Ensure the user running cron has read access to the repo and write access to `state_dir`, `library_dir`, `paper_dir`, and `logs_dir`.
 
 ---
 

@@ -54,7 +54,7 @@ class LinUCBPolicy:
         state_dir = config.delivery.state_dir
         feedback = config.feedback
         policy_cfg = config.policy
-        keyphrases_norm = [normalize_text(k) for k in config.interests.keyphrases if k]
+        keyphrases_norm = [normalize_text(k) for k in config.direction.include_keywords if k]
         blocked_phrases = [p for p in feedback.blocked_phrases if p]
         blocked_authors = [a for a in feedback.blocked_authors if a]
 

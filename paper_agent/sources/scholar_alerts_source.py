@@ -257,10 +257,9 @@ def _apply_light_filter(
     items: list[_RawItem],
     light_filter,
 ) -> list[_RawItem]:
-    """Case-insensitive: include_keywords, exclude_keywords, exclude_authors."""
+    """Case-insensitive: include_keywords, exclude_keywords."""
     inc = [k.lower() for k in (light_filter.include_keywords or [])]
     exc = [k.lower() for k in (light_filter.exclude_keywords or [])]
-    exc_auth = [a.lower() for a in (light_filter.exclude_authors or [])]
 
     def matches_any(text: str, patterns: list[str]) -> bool:
         t = (text or "").lower()
@@ -268,8 +267,6 @@ def _apply_light_filter(
 
     filtered: list[_RawItem] = []
     for it in items:
-        if exc_auth and any(matches_any(a, exc_auth) for a in it.authors):
-            continue
         combined = f"{it.title}\n{it.snippet}".strip()
         if inc and not matches_any(combined, inc):
             continue

@@ -1,8 +1,8 @@
 """
 Filter and rank papers per config (case-insensitive).
-Interest model: seeds, keyphrases, negative_keyphrases; direction: categories, include/exclude keywords/authors.
-When keyphrases is non-empty, require at least one keyphrase match OR paper in seeds.
-Every recommended paper gets a human-readable why_this_paper (keyphrases and/or seed).
+Keyphrases/negative from direction.include_keywords / direction.exclude_keywords; interest gate uses seeds.
+When include_keywords is non-empty, require at least one match OR paper in seeds.
+Every recommended paper gets a human-readable why_this_paper.
 """
 
 from dataclasses import dataclass
@@ -20,20 +20,6 @@ class RankedPaper:
 
     paper: Paper
     why_this_paper: Optional[str] = None
-
-
-def _author_matches_exclude(paper: Paper, exclude_authors: list[str]) -> bool:
-    """True if any excluded author substring matches a paper author (case-insensitive)."""
-    if not exclude_authors:
-        return False
-    for ex in exclude_authors:
-        if not ex:
-            continue
-        ex_norm = normalize_text(ex)
-        for a in paper.authors:
-            if ex_norm in normalize_text(a):
-                return True
-    return False
 
 
 def count_after_category(
@@ -78,18 +64,15 @@ def build_why_this_paper(
 
 def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
     """
-    Filter by direction (categories, include/exclude keywords/authors) and interest model.
-    When keyphrases is non-empty, include only if at least one keyphrase matches OR paper ID in seeds.
-    Case-insensitive throughout. Every included paper gets why_this_paper set.
+    Filter by direction (categories, include/exclude keywords) and seeds.
+    Keyphrases = direction.include_keywords; negative = direction.exclude_keywords.
+    When include_keywords is non-empty, include only if at least one match OR paper ID in seeds.
     """
-    interests = config.interests
     direction = config.direction
-    keyphrases = [k for k in interests.keyphrases if k]
-    seeds = [s for s in interests.seeds if s]
-    neg_phrases = [n for n in interests.negative_keyphrases if n]
-    include_kw = [k for k in direction.include_keywords if k]
-    exclude_kw = [k for k in direction.exclude_keywords if k]
-    exclude_auth = [k for k in direction.exclude_authors if k]
+    keyphrases = [k for k in direction.include_keywords if k]
+    neg_phrases = [n for n in direction.exclude_keywords if n]
+    seeds = [s for s in config.interests.seeds if s]
+    exclude_kw = neg_phrases
     allow_cat = set(normalize_text(c) for c in direction.allow_categories if c)
     deny_cat = set(normalize_text(c) for c in direction.deny_categories if c)
 
@@ -106,16 +89,8 @@ def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
         combined = normalize_text(paper.title) + " " + normalize_text(paper.summary)
         combined_with_authors = combined + " " + " ".join(normalize_text(a) for a in paper.authors)
 
-        # Direction: include_keywords (must match at least one if non-empty)
-        if include_kw and not text_matches_any(combined_with_authors, include_kw):
-            continue
+        # Direction: exclude_keywords always excludes.
         if text_matches_any(combined_with_authors, exclude_kw):
-            continue
-        if _author_matches_exclude(paper, exclude_auth):
-            continue
-
-        # Negative keyphrases: exclude if any match
-        if text_matches_any(combined_with_authors, neg_phrases):
             continue
 
         # Interest gate: when keyphrases non-empty, require keyphrase match OR seed match

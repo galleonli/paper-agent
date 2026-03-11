@@ -1,6 +1,6 @@
 """
 Pipeline orchestration: load config -> fetch -> lookback -> filter/rank -> state (unseen)
--> write local notes + daily digest -> deliver (Slack). Log failure on delivery; do not re-push.
+-> write local notes + daily digest.
 Catch-up safe and idempotent: seen state is persisted after local output.
 """
 
@@ -16,7 +16,6 @@ from paper_agent.filter_papers import RankedPaper, count_after_category, filter_
 from paper_agent.policy.base import ScoredPaper
 from paper_agent.output.local import write_daily_digest, write_local_note
 from paper_agent.export import write_bibtex, write_ris
-from paper_agent.deliver import send_slack_brief
 from paper_agent.sources import fetch_arxiv
 from paper_agent.sources import scholar_alerts_source
 from paper_agent.policy.base import PolicyContext
@@ -39,7 +38,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     """
     Run the full pipeline. Returns all newly processed RankedPaper items
     (discovery + Scholar Inbox).
-    State is saved after local notes and daily digest; if Slack fails, we log and do not re-push next run.
+    State is saved after local notes and daily digest.
     """
     config = load_config(config_path)
     direction = config.direction
@@ -147,7 +146,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     unseen_ids, seen_cache = filter_unseen(delivery.state_dir, paper_ids)
     if not unseen_ids and not scholar_new:
         log.info(
-            "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=0 pushed_count=0 num_topics=%d exploration_picks=%d autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_pushed=%d scholar_provider=%s",
+            "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=0 num_topics=%d exploration_picks=%d autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_provider=%s",
             fetched_total,
             after_category,
             after_filters,
@@ -160,7 +159,6 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             autotune_daily_reward,
             discovery_selected,
             len(scholar_new),
-            0,
             scholar_provider,
         )
         return []
@@ -191,7 +189,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     )
 
     Path(delivery.library_dir).mkdir(parents=True, exist_ok=True)
-    Path(delivery.daily_dir).mkdir(parents=True, exist_ok=True)
+    Path(delivery.paper_dir).mkdir(parents=True, exist_ok=True)
 
     # Build RankedPaper wrappers for Scholar Inbox (no bandit why/selection semantics).
     scholar_ranked: list[RankedPaper] = []
@@ -240,29 +238,12 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     digest_path = write_daily_digest(
         ranked_unseen,
         scholar_ranked,
-        delivery.daily_dir,
+        delivery.paper_dir,
         run_date,
     )
 
     # Persist seen after local output for discovery feed (Scholar Inbox already persisted in source).
     save_seen(delivery.state_dir, seen_cache)
-
-    pushed_count = 0
-    scholar_pushed = 0
-    if delivery.slack.enabled:
-        try:
-            send_slack_brief(
-                ranked_unseen,
-                scholar_ranked,
-                config,
-                discovery_note_paths,
-                scholar_note_paths,
-            )
-            pushed_count = new_count
-            if config.sources.scholar_alerts.enabled and config.sources.scholar_alerts.push_to_slack:
-                scholar_pushed = len(scholar_ranked)
-        except Exception as e:
-            log.warning("Slack push failed (papers already marked seen): %s", e)
 
     if autotune_controller and autotune_params:
         diversity_metrics = {
@@ -299,13 +280,12 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         )
 
     log.info(
-        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d pushed_count=%d num_topics=%d exploration_picks=%d digest_path=%s autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_pushed=%d scholar_provider=%s",
+        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d num_topics=%d exploration_picks=%d digest_path=%s autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_provider=%s",
         fetched_total,
         after_category,
         after_filters,
         selected,
         new_count,
-        pushed_count,
         num_topics,
         exploration_picks,
         str(digest_path),
@@ -315,7 +295,6 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         autotune_daily_reward,
         discovery_selected,
         len(scholar_new),
-        scholar_pushed,
         scholar_provider,
     )
     return ranked_unseen + scholar_ranked
