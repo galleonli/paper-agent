@@ -113,13 +113,13 @@ ${paper.authors?.length ? `**Authors:** ${paper.authors.join(", ")}\n\n` : ""}${
 
 ---
 
-${paper.abstract ?? "No abstract available."}
-
----
-
 **Why this paper**
 
 ${paper.whyThisPaper ?? "N/A"}
+
+---
+
+${paper.abstract ?? "No abstract available."}
 ${paper.researchSummary?.body ? `
 
 ---
