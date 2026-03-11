@@ -143,8 +143,7 @@ If you do **not** use AI summarization:
 
 - You do **not** need to set `OPENAI_API_KEY`.
 - The pipeline still writes notes, digest, exports, logs, and optional Slack output.
-- The note `Summary` section falls back to a short abstract/snippet summary.
-- The extra structured `Research-focused summary` section is simply omitted.
+- Notes use the abstract (or snippet from the source); the optional `Research-focused summary` section is simply omitted.
 
 If you want to customize the research-summary prompt, leave the built-in default as-is or override it with `prompts.research_summary_template` near the end of `config.yaml`.
 
@@ -154,8 +153,8 @@ If you want to customize the research-summary prompt, leave the built-in default
 
 | Artifact | Path | Contents |
 |----------|------|----------|
-| **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract/snippet summary, why-this-paper, and key points. Discovery notes may also include an optional LLM-based `Research-focused summary`; Scholar notes stay light and may contain placeholders. |
-| **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json` | Machine-readable mirror of each note (id, title, authors, link, summary, why_this_paper, etc.) for programmatic use. |
+| **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract, why-this-paper, and key points. Discovery notes may include an optional `Research-focused summary`; Scholar notes stay light and may use placeholders when abstract is missing. |
+| **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json` | Machine-readable mirror of each note (id, title, authors, link, abstract, why_this_paper, optional research_summary, etc.) for scripts and `today` / `list --json`. |
 | **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`. |
 | **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
 | **Exports** | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
@@ -193,7 +192,8 @@ Papers: 3
 
 - Ingest **Google Scholar Alert emails** only (mbox, `.eml` directory, or Gmail IMAP). No RSS and no Google Scholar crawling.
 - **Not** capped by `max_papers_per_day`; bounded only by `sources.scholar_alerts.max_items_per_run`.
-- **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`sources.scholar_alerts.light_filter.include_keywords`, `sources.scholar_alerts.light_filter.exclude_keywords`, `sources.scholar_alerts.light_filter.exclude_authors`).
+- **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`sources.scholar_alerts.light_filter.*`).
+- **Abstract enrichment:** If the alert link is arXiv, the agent fetches the full abstract (and authors, categories, PDF link) from the arXiv API. For other links it may try to fetch title and abstract from the page (best-effort); if that fails or is not possible, it keeps the email snippet. Enrichment never blocks: you always get at least the snippet.
 - Scholar notes do not include the optional LLM `Research-focused summary` section.
 - Setup and provider details: see [Google Scholar setup](#google-scholar-setup) and [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md).
 
