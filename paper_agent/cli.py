@@ -5,6 +5,7 @@ CLI entrypoint: python -m paper_agent run [--config path]
 import argparse
 import json
 import platform
+import re
 import subprocess
 import sys
 from datetime import date
@@ -54,6 +55,18 @@ def _open_with_default_app(path: Path) -> int:
         return 1
 
 
+def _safe_string(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(_safe_string(v) for v in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Paper Intelligence Agent")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -100,6 +113,27 @@ def main() -> None:
         type=int,
         default=None,
         help="Optional maximum number of papers to return",
+    )
+
+    search_parser = sub.add_parser(
+        "search", help="Search recent papers from local outputs"
+    )
+    search_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Path to config.yaml (default: config.yaml)",
+    )
+    search_parser.add_argument(
+        "--query",
+        type=str,
+        required=True,
+        help='Search query (e.g. "continual learning")',
+    )
+    search_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Return matched entries as JSON (recommended for automation)",
     )
 
     open_parser = sub.add_parser(
@@ -152,6 +186,16 @@ def main() -> None:
                 if data is not None:
                     entries.append(data)
 
+        if entries:
+            def _sort_key(e: Any) -> str:
+                if isinstance(e, dict):
+                    published = str(e.get("published") or "")
+                    date_str = str(e.get("date") or today)
+                    return published or date_str
+                return ""
+
+            entries.sort(key=_sort_key, reverse=True)
+
         if args.json:
             json.dump(entries, sys.stdout, indent=2)
             sys.stdout.write("\n")
@@ -176,8 +220,18 @@ def main() -> None:
             if data is None:
                 continue
             entries.append(data)
-            if limit is not None and len(entries) >= limit:
-                break
+
+        if entries:
+            def _sort_key(e: Any) -> str:
+                if isinstance(e, dict):
+                    published = str(e.get("published") or "")
+                    date_str = str(e.get("date") or "")
+                    return published or date_str
+                return ""
+
+            entries.sort(key=_sort_key, reverse=True)
+            if limit is not None:
+                entries = entries[:limit]
 
         if args.json:
             json.dump(entries, sys.stdout, indent=2)
@@ -229,6 +283,126 @@ def main() -> None:
         rc = _open_with_default_app(note_path)
         if rc != 0:
             sys.exit(rc)
+
+    elif args.command == "search":
+        config_path = args.config
+        if not config_path.exists():
+            print(f"Config not found: {config_path}", file=sys.stderr)
+            print("Copy config.example.yaml to config.yaml and edit.", file=sys.stderr)
+            sys.exit(1)
+
+        delivery = _load_config_delivery(config_path)
+        library_dir = Path(delivery.library_dir)
+        query_text = str(args.query or "").strip()
+
+        # Load all paper JSON entries from library_dir/YYYY-MM-DD/*.json (newest first).
+        entries: List[Any] = []
+        for json_path in _iter_paper_json_files(library_dir):
+            data = _read_json_safely(json_path)
+            if data is not None:
+                entries.append(data)
+
+        # Normalize query into tokens, including short date pattern expansion (e.g. 2603.11 -> 2026-03-11).
+        def _normalize_query_tokens(text: str) -> list[str]:
+            tokens: list[str] = []
+            for raw in text.strip().split():
+                lower = raw.lower()
+                m = re.match(r"^(\d{2})(\d{2})\.(\d{1,2})$", lower)
+                if m:
+                    year = f"20{m.group(1)}"
+                    month = m.group(2)
+                    day = m.group(3).zfill(2)
+                    tokens.append(f"{year}-{month}-{day}")
+                else:
+                    tokens.append(lower)
+            return tokens
+
+        def _build_search_blob(e: Any) -> str:
+            if not isinstance(e, dict):
+                return ""
+            parts = [
+                _safe_string(e.get("title")),
+                _safe_string(e.get("authors")),
+                _safe_string(e.get("abstract")),
+                _safe_string(e.get("categories")),
+                _safe_string(e.get("id")),
+                _safe_string(e.get("date")),
+                _safe_string(e.get("published")),
+            ]
+            return " ".join(parts).lower()
+
+        def _has_all_tokens(blob: str, tokens: list[str]) -> bool:
+            if not tokens:
+                return True
+            return all(t in blob for t in tokens if t)
+
+        def _score_entry(e: Any, tokens: list[str], full_query: str) -> int:
+            if not isinstance(e, dict) or not tokens:
+                return 0
+            title = _safe_string(e.get("title")).lower()
+            authors = _safe_string(e.get("authors")).lower()
+            abstract = _safe_string(e.get("abstract")).lower()
+            categories = _safe_string(e.get("categories")).lower()
+            pid = _safe_string(e.get("id")).lower()
+            date_str = _safe_string(e.get("date")).lower()
+            published = _safe_string(e.get("published")).lower()
+
+            score = 0
+            for t in tokens:
+                if not t:
+                    continue
+                if t in title or t in authors:
+                    score += 4
+                elif t in abstract:
+                    score += 2
+                elif t in categories:
+                    score += 1
+                elif t in pid or t in date_str or t in published:
+                    score += 1
+
+            phrase = full_query.lower()
+            if phrase:
+                if phrase in title or phrase in authors:
+                    score += 10
+                elif phrase in abstract:
+                    score += 5
+                elif phrase in categories:
+                    score += 2
+            return score
+
+        def _date_key(e: Any) -> str:
+            if not isinstance(e, dict):
+                return ""
+            published = _safe_string(e.get("published"))
+            date_str = _safe_string(e.get("date"))
+            return published or date_str
+
+        tokens = _normalize_query_tokens(query_text)
+        full_query = " ".join(tokens)
+
+        if not tokens:
+            # No query tokens: just sort by date key descending (same as list).
+            entries.sort(key=_date_key, reverse=True)
+            results = entries
+        else:
+            results_scored: list[tuple[Any, int]] = []
+            for e in entries:
+                blob = _build_search_blob(e)
+                if not _has_all_tokens(blob, tokens):
+                    continue
+                score = _score_entry(e, tokens, full_query)
+                if score > 0:
+                    results_scored.append((e, score))
+            results_scored.sort(
+                key=lambda pair: (pair[1], _date_key(pair[0])), reverse=True
+            )
+            results = [e for (e, _score) in results_scored]
+
+        if args.json:
+            json.dump(results, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            print(f"{len(results)} paper(s) matched query")  # pragma: no cover
 
 
 if __name__ == "__main__":
