@@ -31,7 +31,7 @@ def _base_config(tmp_path: Path, provider: str = "eml_dir", eml_dir: str = "", m
         direction=DirectionConfig(max_papers_per_day=10, lookback_days=7),
         delivery=DeliveryConfig(
             library_dir=str(tmp_path / "library"),
-            daily_dir=str(tmp_path / "daily"),
+            paper_dir=str(tmp_path / "daily"),
             state_dir=str(tmp_path / "state"),
             logs_dir=str(tmp_path / "logs"),
         ),

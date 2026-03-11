@@ -12,8 +12,6 @@ def _config_with_autotune(tmp_path: Path) -> Config:
     yaml_text = f"""
 interests:
   seeds: []
-  keyphrases: []
-  negative_keyphrases: []
 direction:
   max_papers_per_day: 5
   lookback_days: 3
@@ -22,18 +20,16 @@ direction:
   queries: []
   include_keywords: []
   exclude_keywords: []
-  exclude_authors: []
 delivery:
-  slack:
-    enabled: false
-    webhook_url: ""
   library_dir: "{(tmp_path / "library").as_posix()}"
-  daily_dir: "{(tmp_path / "daily").as_posix()}"
+  paper_dir: "{(tmp_path / "daily").as_posix()}"
   state_dir: "{(tmp_path / "state").as_posix()}"
   logs_dir: "{(tmp_path / "logs").as_posix()}"
 summarize:
   enabled: false
-  brief_summary: true
+  provider: openai
+  model: gpt-4o-mini
+  language: en
 export:
   formats: ["bibtex", "ris"]
 sources:
@@ -145,8 +141,6 @@ def test_autotune_thompson_converges_basic(tmp_path: Path) -> None:
     yaml_text = f"""
 interests:
   seeds: []
-  keyphrases: []
-  negative_keyphrases: []
 direction:
   max_papers_per_day: 5
   lookback_days: 3
@@ -155,18 +149,16 @@ direction:
   queries: []
   include_keywords: []
   exclude_keywords: []
-  exclude_authors: []
 delivery:
-  slack:
-    enabled: false
-    webhook_url: ""
   library_dir: "{(tmp_path / "library").as_posix()}"
-  daily_dir: "{(tmp_path / "daily").as_posix()}"
+  paper_dir: "{(tmp_path / "daily").as_posix()}"
   state_dir: "{(tmp_path / "state").as_posix()}"
   logs_dir: "{(tmp_path / "logs").as_posix()}"
 summarize:
   enabled: false
-  brief_summary: true
+  provider: openai
+  model: gpt-4o-mini
+  language: en
 export:
   formats: ["bibtex", "ris"]
 sources:

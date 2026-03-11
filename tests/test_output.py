@@ -55,7 +55,7 @@ def test_write_local_note(tmp_path: Path) -> None:
 
 
 def test_write_daily_digest(tmp_path: Path) -> None:
-    """write_daily_digest creates daily_dir/YYYY-MM-DD.md with two sections (Daily Precision + Scholar Inbox)."""
+    """write_daily_digest creates paper_dir/YYYY-MM-DD.md with two sections (Daily Precision + Scholar Inbox)."""
     discovery = [_ranked("1", "First"), _ranked("2", "Second")]
     scholar = [_ranked("3", "Third")]
     run_date = date(2024, 1, 15)

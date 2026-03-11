@@ -36,12 +36,8 @@ def _paper(
 def test_deterministic_policy_scores_and_sets_why_this_paper() -> None:
     """Deterministic policy returns ScoredPaper with why_this_paper and score."""
     config = Config(
-        interests=InterestsConfig(
-            seeds=[],
-            keyphrases=["contrastive", "protein"],
-            negative_keyphrases=[],
-        ),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, include_keywords=["contrastive", "protein"], exclude_keywords=[]),
         feedback=FeedbackConfig(),
         selection=SelectionConfig(),
     )
@@ -67,8 +63,8 @@ def test_deterministic_policy_scores_and_sets_why_this_paper() -> None:
 def test_deterministic_policy_blocked_phrases_excludes() -> None:
     """Papers matching feedback.blocked_phrases are excluded from scored list."""
     config = Config(
-        interests=InterestsConfig(seeds=[], keyphrases=["ml"], negative_keyphrases=[]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, include_keywords=["ml"], exclude_keywords=[]),
         feedback=FeedbackConfig(blocked_phrases=["survey", "review"]),
         selection=SelectionConfig(),
     )
@@ -87,8 +83,8 @@ def test_deterministic_policy_blocked_phrases_excludes() -> None:
 def test_deterministic_policy_blocked_authors_excludes() -> None:
     """Papers with feedback.blocked_authors are excluded."""
     config = Config(
-        interests=InterestsConfig(seeds=[], keyphrases=["ml"], negative_keyphrases=[]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, include_keywords=["ml"], exclude_keywords=[]),
         feedback=FeedbackConfig(blocked_authors=["Bob"]),
         selection=SelectionConfig(),
     )
@@ -107,8 +103,8 @@ def test_deterministic_policy_blocked_authors_excludes() -> None:
 def test_deterministic_policy_boosted_phrases_increase_score() -> None:
     """Boosted phrases increase score (relative ordering)."""
     config = Config(
-        interests=InterestsConfig(seeds=[], keyphrases=["learning"], negative_keyphrases=[]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, include_keywords=["learning"], exclude_keywords=[]),
         feedback=FeedbackConfig(boosted_phrases=["transformers"]),
         selection=SelectionConfig(),
     )
@@ -127,8 +123,8 @@ def test_deterministic_policy_boosted_phrases_increase_score() -> None:
 def test_deterministic_policy_empty_why_when_no_match() -> None:
     """When no keyphrase/seed matches, why_this_paper is fallback '—'."""
     config = Config(
-        interests=InterestsConfig(seeds=[], keyphrases=[], negative_keyphrases=[]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, include_keywords=[], exclude_keywords=[]),
         feedback=FeedbackConfig(),
         selection=SelectionConfig(),
     )

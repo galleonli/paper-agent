@@ -25,10 +25,16 @@ def _paper(
 
 
 def test_filter_negative_keyphrase() -> None:
-    """Papers matching negative_keyphrases are excluded (case-insensitive)."""
+    """Papers matching exclude_keywords are excluded (case-insensitive)."""
     config = Config(
-        interests=InterestsConfig(keyphrases=["contrastive"], negative_keyphrases=["survey"]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, allow_categories=[]),
+        interests=InterestsConfig(seeds=[]),
+        direction=DirectionConfig(
+            max_papers_per_day=10,
+            lookback_days=2,
+            allow_categories=[],
+            include_keywords=["contrastive"],
+            exclude_keywords=["survey"],
+        ),
     )
     papers = [
         _paper("1", title="A Survey of ML", summary="This is a survey."),
@@ -39,31 +45,17 @@ def test_filter_negative_keyphrase() -> None:
     assert result[0].paper.id == "2"
 
 
-def test_filter_exclude_authors() -> None:
-    """Papers by exclude_authors are excluded (case-insensitive)."""
+def test_why_this_paper_set_when_keyphrase_matches() -> None:
+    """When include_keywords match title/summary, why_this_paper is set."""
     config = Config(
-        interests=InterestsConfig(keyphrases=[], negative_keyphrases=[]),
+        interests=InterestsConfig(seeds=[]),
         direction=DirectionConfig(
             max_papers_per_day=10,
             lookback_days=2,
-            allow_categories=["cs.LG"],
-            exclude_authors=["Bob"],
+            allow_categories=[],
+            include_keywords=["contrastive", "protein"],
+            exclude_keywords=[],
         ),
-    )
-    papers = [
-        _paper("1", authors=["Alice", "Bob"]),
-        _paper("2", authors=["Alice", "Charlie"]),
-    ]
-    result = filter_and_rank(papers, config)
-    assert len(result) == 1
-    assert result[0].paper.id == "2"
-
-
-def test_why_this_paper_set_when_keyphrase_matches() -> None:
-    """When a keyphrase matches title/summary, why_this_paper is set."""
-    config = Config(
-        interests=InterestsConfig(keyphrases=["contrastive", "protein"], negative_keyphrases=[]),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, allow_categories=[]),
     )
     papers = [_paper(title="Contrastive Representation Learning for Protein Folding")]
     result = filter_and_rank(papers, config)
@@ -74,14 +66,16 @@ def test_why_this_paper_set_when_keyphrase_matches() -> None:
 
 
 def test_ranking_keyphrase_matches_first() -> None:
-    """Papers with keyphrase match are ranked before seed-only; when keyphrases set, non-matching excluded."""
+    """Papers with keyphrase match are ranked before seed-only; when include_keywords set, non-matching excluded."""
     config = Config(
-        interests=InterestsConfig(
-            keyphrases=["contrastive"],
-            negative_keyphrases=[],
-            seeds=["https://arxiv.org/abs/1"],
+        interests=InterestsConfig(seeds=["https://arxiv.org/abs/1"]),
+        direction=DirectionConfig(
+            max_papers_per_day=10,
+            lookback_days=2,
+            allow_categories=[],
+            include_keywords=["contrastive"],
+            exclude_keywords=[],
         ),
-        direction=DirectionConfig(max_papers_per_day=10, lookback_days=2, allow_categories=[]),
     )
     papers = [
         _paper("1", title="Other topic", summary="We study something else."),
@@ -112,7 +106,7 @@ def test_count_after_category() -> None:
 def test_allow_deny_categories() -> None:
     """allow_categories: paper must have at least one allowed; deny_categories: exclude if any match."""
     config = Config(
-        interests=InterestsConfig(keyphrases=[], negative_keyphrases=[]),
+        interests=InterestsConfig(seeds=[]),
         direction=DirectionConfig(
             max_papers_per_day=10,
             lookback_days=2,
@@ -134,7 +128,7 @@ def test_allow_deny_categories() -> None:
 def test_include_keywords_must_match() -> None:
     """When include_keywords is non-empty, paper must match at least one (case-insensitive)."""
     config = Config(
-        interests=InterestsConfig(keyphrases=[], negative_keyphrases=[]),
+        interests=InterestsConfig(seeds=[]),
         direction=DirectionConfig(
             max_papers_per_day=10,
             lookback_days=2,
@@ -154,7 +148,7 @@ def test_include_keywords_must_match() -> None:
 def test_exclude_keywords_case_insensitive() -> None:
     """Papers matching exclude_keywords are excluded (case-insensitive, title+abstract+authors)."""
     config = Config(
-        interests=InterestsConfig(keyphrases=[], negative_keyphrases=[]),
+        interests=InterestsConfig(seeds=[]),
         direction=DirectionConfig(
             max_papers_per_day=10,
             lookback_days=2,

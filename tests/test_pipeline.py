@@ -32,8 +32,6 @@ def _minimal_config(tmp_path: Path, **kwargs: str) -> str:
     base = """
 interests:
   seeds: []
-  keyphrases: []
-  negative_keyphrases: []
 direction:
   max_papers_per_day: 5
   lookback_days: 3
@@ -42,18 +40,16 @@ direction:
   queries: []
   include_keywords: []
   exclude_keywords: []
-  exclude_authors: []
 delivery:
-  slack:
-    enabled: false
-    webhook_url: ""
   library_dir: "{library_dir}"
-  daily_dir: "{daily_dir}"
+  paper_dir: "{paper_dir}"
   state_dir: "{state_dir}"
   logs_dir: "{logs_dir}"
 summarize:
   enabled: false
-  brief_summary: true
+  provider: "openai"
+  model: "gpt-4o-mini"
+  language: "en"
 export:
   formats: ["bibtex", "ris"]
 sources:
@@ -82,7 +78,7 @@ advanced:
 """
     return base.format(
         library_dir=(tmp_path / "library").as_posix(),
-        daily_dir=(tmp_path / "daily").as_posix(),
+        paper_dir=(tmp_path / "daily").as_posix(),
         state_dir=(tmp_path / "state").as_posix(),
         logs_dir=(tmp_path / "logs").as_posix(),
         **kwargs,
@@ -93,7 +89,6 @@ def _write_config(
     tmp_path: Path,
     *,
     arxiv_enabled: bool = False,
-    slack_enabled: bool = False,
     policy_type: str = "deterministic",
     autotune_block: str = "",
     summarize_enabled: bool = False,
@@ -105,13 +100,10 @@ def _write_config(
         "sources:\n  arxiv:\n    enabled: false",
         f"sources:\n  arxiv:\n    enabled: {str(arxiv_enabled).lower()}",
     )
-    cfg = cfg.replace("enabled: false", f"enabled: {str(slack_enabled).lower()}", 1)
-    if slack_enabled:
-        cfg = cfg.replace('webhook_url: ""', 'webhook_url: "https://hooks.slack.com/fake"')
     if summarize_enabled:
         cfg = cfg.replace(
-            "summarize:\n  enabled: false\n  brief_summary: true",
-            "summarize:\n  enabled: true\n  provider: openai\n  model: gpt-4o-mini\n  brief_summary: true\n  research_summary_enabled: true",
+            "summarize:\n  enabled: false\n  provider: openai\n  model: gpt-4o-mini\n  language: en",
+            "summarize:\n  enabled: true\n  provider: openai\n  model: gpt-4o-mini\n  language: en",
         )
     if autotune_block:
         cfg += autotune_block
@@ -166,20 +158,14 @@ def test_run_with_linucb_policy_logs_diversity_metrics(tmp_path: Path, caplog: p
     assert "exploration_picks=" in log_text
 
 
-def test_slack_failure_still_saves_seen_no_repush(tmp_path: Path) -> None:
-    """When Slack raises, pipeline logs warning and does not re-raise; seen is saved so next run has 0 new."""
+def test_pipeline_still_saves_seen_and_no_repush(tmp_path: Path) -> None:
+    """Seen state is saved so next run with same input has 0 new papers."""
     state_dir = tmp_path / "state"
     state_dir.mkdir(parents=True)
-    config_path = _write_config(tmp_path, arxiv_enabled=True, slack_enabled=True)
+    config_path = _write_config(tmp_path, arxiv_enabled=True)
     fake_paper = _paper("2301.99999")
 
-    with (
-        patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
-        patch(
-            "paper_agent.pipeline.send_slack_brief",
-            side_effect=RuntimeError("Slack failed"),
-        ),
-    ):
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         result = pipeline_run(config_path)
     assert len(result) == 1
     assert result[0].paper.id == "2301.99999"
@@ -189,10 +175,7 @@ def test_slack_failure_still_saves_seen_no_repush(tmp_path: Path) -> None:
     data = json.loads(seen_path.read_text(encoding="utf-8"))
     assert "2301.99999" in data.get("seen_ids", [])
 
-    with (
-        patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
-        patch("paper_agent.pipeline.send_slack_brief"),
-    ):
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         result2 = pipeline_run(config_path)
     assert len(result2) == 0
 
@@ -320,33 +303,28 @@ def test_catch_up_lookback_and_seen_behavior(tmp_path: Path) -> None:
     assert "2403.99999" not in seen_data.get("seen_ids", [])
 
 
-def test_idempotency_no_duplicate_artifacts_or_slack_push(tmp_path: Path) -> None:
+def test_idempotency_no_duplicate_artifacts(tmp_path: Path) -> None:
     """
     Running twice with no new input:
-    - no duplicate notes,
-    - no duplicate Slack push calls.
+    - no duplicate notes.
     """
-    config_path = _write_config(tmp_path, arxiv_enabled=True, slack_enabled=True)
+    config_path = _write_config(tmp_path, arxiv_enabled=True)
     fake_paper = _paper("2403.00003", title="Artifact Test Paper")
 
-    with (
-        patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
-        patch("paper_agent.pipeline.send_slack_brief") as slack_mock,
-    ):
+    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         first = pipeline_run(config_path)
         second = pipeline_run(config_path)
 
     assert len(first) == 1
     assert second == []
-    assert slack_mock.call_count == 1
 
     library_dir = tmp_path / "library"
-    daily_dir = tmp_path / "daily"
+    paper_dir = tmp_path / "daily"
     date_subdir = datetime.now().date().isoformat()
     assert (library_dir / date_subdir / "2403.00003.md").exists()
     assert (library_dir / date_subdir / "2403.00003.bib").exists()
     assert (library_dir / date_subdir / "2403.00003.ris").exists()
-    assert (daily_dir / f"{datetime.now().date().isoformat()}.md").exists()
+    assert (paper_dir / f"{datetime.now().date().isoformat()}.md").exists()
     assert (tmp_path / "logs" / "latest.log").exists()
     assert len(list(library_dir.glob("*/*.md"))) == 1
 
@@ -389,7 +367,6 @@ def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tm
     config_path = _write_config(
         tmp_path,
         arxiv_enabled=True,
-        slack_enabled=False,
         summarize_enabled=True,
     )
     fake_paper = _paper("2501.11111", title="Test Paper For Summary")
@@ -398,8 +375,8 @@ def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tm
     with (
         patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
         patch(
-            "paper_agent.core.summarize._call_openai_chat",
-            return_value=mocked_summary_body,
+            "paper_agent.pipeline.build_research_summary",
+            return_value=("Research-focused summary", mocked_summary_body),
         ),
     ):
         result = pipeline_run(config_path)

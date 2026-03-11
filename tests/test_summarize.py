@@ -26,7 +26,6 @@ def test_build_research_summary_calls_openai_with_model_and_timeout() -> None:
     cfg.summarize.enabled = True
     cfg.summarize.provider = "openai"
     cfg.summarize.model = "gpt-4.1-mini"
-    cfg.summarize.research_summary_enabled = True
     cfg.advanced.request_timeout_seconds = 42
 
     with patch(
@@ -46,7 +45,7 @@ def test_build_research_summary_calls_openai_with_model_and_timeout() -> None:
 
 
 def test_build_research_summary_returns_none_when_disabled_or_provider_invalid() -> None:
-    """Disabled summarize/research toggle or invalid provider should return None."""
+    """Disabled summarize or invalid provider should return None."""
     cfg = Config()
     p = _paper()
 
@@ -54,10 +53,6 @@ def test_build_research_summary_returns_none_when_disabled_or_provider_invalid()
     assert build_research_summary(p, "why", cfg) is None
 
     cfg.summarize.enabled = True
-    cfg.summarize.research_summary_enabled = False
-    assert build_research_summary(p, "why", cfg) is None
-
-    cfg.summarize.research_summary_enabled = True
     cfg.summarize.provider = "unknown-provider"
     assert build_research_summary(p, "why", cfg) is None
 
@@ -159,7 +154,6 @@ def test_build_research_summary_invokes_openai_api_when_key_set() -> None:
     cfg.summarize.enabled = True
     cfg.summarize.provider = "openai"
     cfg.summarize.model = "gpt-4o-mini"
-    cfg.summarize.research_summary_enabled = True
     cfg.advanced.request_timeout_seconds = 30
 
     class _FakeResponse:
@@ -194,7 +188,6 @@ def test_build_research_summary_returns_none_when_key_missing_even_if_enabled() 
     cfg = Config()
     cfg.summarize.enabled = True
     cfg.summarize.provider = "openai"
-    cfg.summarize.research_summary_enabled = True
 
     with (
         patch.dict("os.environ", {}, clear=True),

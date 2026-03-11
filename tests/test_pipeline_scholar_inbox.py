@@ -15,8 +15,6 @@ def _config_with_scholar(tmp_path: Path) -> Path:
     cfg = f"""
 interests:
   seeds: []
-  keyphrases: []
-  negative_keyphrases: []
 direction:
   max_papers_per_day: 2
   lookback_days: 7
@@ -25,18 +23,16 @@ direction:
   queries: []
   include_keywords: []
   exclude_keywords: []
-  exclude_authors: []
 delivery:
-  slack:
-    enabled: false
-    webhook_url: ""
   library_dir: "{(tmp_path / "library").as_posix()}"
-  daily_dir: "{(tmp_path / "daily").as_posix()}"
+  paper_dir: "{(tmp_path / "daily").as_posix()}"
   state_dir: "{(tmp_path / "state").as_posix()}"
   logs_dir: "{(tmp_path / "logs").as_posix()}"
 summarize:
   enabled: false
-  brief_summary: true
+  provider: openai
+  model: gpt-4o-mini
+  language: en
 export:
   formats: ["bibtex", "ris"]
 sources:
@@ -51,11 +47,9 @@ sources:
       mbox_path: ""
       from_addresses: []
     max_items_per_run: 10
-    push_to_slack: true
     light_filter:
       include_keywords: []
       exclude_keywords: []
-      exclude_authors: []
     ordering: "arrival"
 feedback:
   blocked_phrases: []

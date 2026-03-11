@@ -56,15 +56,13 @@ def _config(
     state_dir: str = "./state",
 ) -> Config:
     return Config(
-        interests=InterestsConfig(
-            seeds=[],
-            keyphrases=keyphrases or ["contrastive", "learning"],
-            negative_keyphrases=[],
-        ),
+        interests=InterestsConfig(seeds=[]),
         direction=DirectionConfig(
             max_papers_per_day=10,
             lookback_days=2,
             allow_categories=allow_categories or ["cs.LG", "cs.CL"],
+            include_keywords=keyphrases or ["contrastive", "learning"],
+            exclude_keywords=[],
         ),
         delivery=DeliveryConfig(state_dir=state_dir),
         feedback=FeedbackConfig(),
