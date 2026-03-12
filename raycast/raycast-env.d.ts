@@ -66,6 +66,8 @@ declare namespace Preferences {
   export type SearchPapers = ExtensionPreferences & {}
   /** Preferences accessible in the `run-pipeline` command */
   export type RunPipeline = ExtensionPreferences & {}
+  /** Preferences accessible in the `open-paper-repo` command */
+  export type OpenPaperRepo = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -77,5 +79,7 @@ declare namespace Arguments {
   export type SearchPapers = {}
   /** Arguments passed to the `run-pipeline` command */
   export type RunPipeline = {}
+  /** Arguments passed to the `open-paper-repo` command */
+  export type OpenPaperRepo = {}
 }
 

@@ -1,0 +1,35 @@
+import { getPreferenceValues, open, showToast, Toast } from "@raycast/api";
+import * as fs from "node:fs";
+import { resolvePaperDir } from "./config-utils";
+
+const prefs = getPreferenceValues<Preferences.OpenPaperRepo>();
+const CONFIG_PATH = prefs.configPath?.trim() ?? "";
+const PREF_PAPER_DIR = prefs.paperDir?.trim() ?? "";
+const PAPER_DIR = resolvePaperDir(CONFIG_PATH, PREF_PAPER_DIR);
+
+export default async function Command() {
+  if (!PAPER_DIR) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Paper directory not set",
+      message: "Set 'Paper directory' in preferences or config.yaml delivery.paper_dir.",
+    });
+    return;
+  }
+
+  if (!fs.existsSync(PAPER_DIR)) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Folder not found",
+      message: PAPER_DIR,
+    });
+    return;
+  }
+
+  await open(PAPER_DIR);
+  await showToast({
+    style: Toast.Style.Success,
+    title: "Opened paper repo",
+    message: PAPER_DIR,
+  });
+}

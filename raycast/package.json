@@ -238,6 +238,13 @@
       "subtitle": "Run the full pipeline once",
       "description": "Runs paper_agent run with config merged from YAML and extension preferences (preferences override).",
       "mode": "no-view"
+    },
+    {
+      "name": "open-paper-repo",
+      "title": "Open Paper Repo",
+      "subtitle": "Open paper directory in Finder",
+      "description": "Opens the Paper directory folder from Preferences in Finder.",
+      "mode": "no-view"
     }
   ],
   "dependencies": {
