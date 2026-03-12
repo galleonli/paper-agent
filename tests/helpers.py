@@ -49,7 +49,7 @@ def write_config(
     scholar_enabled: bool = False,
     max_papers_per_day: int = 5,
     lookback_days: int = 3,
-    policy_type: str = "deterministic",
+    policy_type: str = "off",
     summarize_enabled: bool = False,
     export_formats: Sequence[str] = ("bibtex", "ris"),
     scholar_provider: str = "eml_dir",

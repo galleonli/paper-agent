@@ -46,11 +46,11 @@ def test_run_returns_ranked_papers_with_why_this_paper_when_new_items(tmp_path: 
     assert hasattr(result[0], "paper") and hasattr(result[0], "why_this_paper")
 
 
-def test_run_with_linucb_policy_logs_diversity_metrics(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """With policy.type=linucb, pipeline runs and log line includes num_topics and exploration_picks."""
+def test_run_with_off_policy_logs_diversity_metrics(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """With policy.type=off, pipeline runs and log line includes num_topics and exploration_picks."""
     import logging
     caplog.set_level(logging.INFO)  # noqa: F811
-    config_path = write_config(tmp_path, policy_type="linucb")
+    config_path = write_config(tmp_path, policy_type="off")
     run(config_path)
     log_text = caplog.text
     assert "num_topics=" in log_text
@@ -79,13 +79,12 @@ def test_pipeline_still_saves_seen_and_no_repush(tmp_path: Path) -> None:
     assert len(result2) == 0
 
 
-def test_integration_autotune_pipeline_contract(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """When autotune.enabled is toggled, pipeline uses correct policy params and logs candidate/reward."""
+def test_integration_policy_off_autotune_never_active(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """With policy.type=off, autotune is never active; logs show autotune_enabled=False."""
     import logging
 
     caplog.set_level(logging.INFO)  # noqa: F811
 
-    # Start from minimal config and enable linucb + autotune.
     autotune_block = """
 autotune:
   enabled: true
@@ -101,39 +100,18 @@ autotune:
       mu_novelty: 0.3
       ridge: 1.0
 """
-    config_path = write_config(
-        tmp_path,
-        policy_type="linucb",
-        extra_yaml=autotune_block,
-    )
-    config_content = config_path.read_text(encoding="utf-8")
-
-    # Case 1: autotune.enabled=false => static policy and autotune_enabled=False in logs.
-    static_cfg = config_content.replace("enabled: true", "enabled: false")
-    config_path.write_text(static_cfg, encoding="utf-8")
+    config_path = write_config(tmp_path, policy_type="off", extra_yaml=autotune_block)
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
         run(config_path)
-    log_text_static = caplog.text
-    assert "autotune_enabled=False" in log_text_static
-
-    # Case 2: autotune.enabled=true => AutoTuneController is used and candidate name appears.
-    caplog.clear()
-    config_path.write_text(config_content, encoding="utf-8")
-    with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
-        run(config_path)
-    log_text = caplog.text
-    assert "autotune_enabled=True" in log_text
-    assert "autotune_candidate_name=" in log_text
-    assert "autotune_daily_reward=" in log_text
+    assert "autotune_enabled=False" in caplog.text
 
 
-def test_autotune_flag_false_when_policy_not_linucb(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """Even if autotune.enabled=true, when policy.type!=linucb the logs must show autotune_enabled=False."""
+def test_autotune_flag_false_when_policy_off(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """With policy.type=off, logs show autotune_enabled=False even if autotune block is present."""
     import logging
 
     caplog.set_level(logging.INFO)  # noqa: F811
 
-    # Keep policy.type deterministic, but configure autotune.enabled=true.
     autotune_block = """
 autotune:
   enabled: true
@@ -149,13 +127,10 @@ autotune:
       mu_novelty: 0.3
       ridge: 1.0
 """
-    config_path = write_config(tmp_path, extra_yaml=autotune_block)
-
+    config_path = write_config(tmp_path, policy_type="off", extra_yaml=autotune_block)
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
         run(config_path)
-    log_text = caplog.text
-    # AutoTune is configured but not active because policy.type != linucb.
-    assert "autotune_enabled=False" in log_text
+    assert "autotune_enabled=False" in caplog.text
 
 
 def test_summarize_disabled_makes_no_llm_calls(tmp_path: Path) -> None:

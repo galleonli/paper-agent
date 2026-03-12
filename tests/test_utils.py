@@ -1,6 +1,13 @@
 """Tests for core text matching utilities."""
 
-from paper_agent.core.utils import text_matches_any
+from paper_agent.core.utils import phrases_matching_text, text_matches_any
+
+
+def test_phrases_matching_text_uses_same_rules_as_text_matches_any() -> None:
+    """phrases_matching_text uses word boundaries so explanation matches filter logic."""
+    text = "We propose a novel method."
+    assert phrases_matching_text(text, ["pose"]) == []
+    assert phrases_matching_text(text, ["propose"]) == ["propose"]
 
 
 def test_text_matches_any_uses_word_boundaries_for_single_word_phrases() -> None:

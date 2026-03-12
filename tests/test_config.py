@@ -102,7 +102,7 @@ def test_load_config_example_file() -> None:
     assert hasattr(cfg, "selection") and hasattr(cfg.selection, "topic_cap")
     assert 0 <= cfg.selection.explore_ratio <= 1
     assert cfg.selection.topic_cap >= 1 and cfg.selection.min_topics >= 1
-    assert hasattr(cfg, "policy") and cfg.policy.type in ("deterministic", "linucb")
+    assert hasattr(cfg, "policy") and cfg.policy.type == "off"
 
 
 def test_load_config_supports_scholar_imap_shape(tmp_path: Path) -> None:
