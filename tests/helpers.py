@@ -24,8 +24,8 @@ def make_paper(
         id=paper_id,
         title=title,
         summary=summary,
-        authors=list(authors or ["Alice"]),
-        categories=list(categories or ["cs.LG"]),
+        authors=list(authors if authors is not None else ["Alice"]),
+        categories=list(categories if categories is not None else ["cs.LG"]),
         updated=updated,
         link_abs=link_abs or f"https://arxiv.org/abs/{paper_id}",
         link_pdf=None,
@@ -33,7 +33,13 @@ def make_paper(
 
 
 def _yaml_inline_list(values: Sequence[str]) -> str:
-    return "[" + ", ".join(f'"{v}"' for v in values) + "]"
+    """Format a sequence as a YAML flow sequence, escaping quotes and backslashes in values."""
+    def escape(v: str) -> str:
+        # Escape backslash first so that a literal \\" in the value becomes \\\\"
+        # in YAML and parses back to \"; escaping quote first would produce
+        # invalid or wrong YAML for values containing both \\ and ".
+        return v.replace("\\", "\\\\").replace('"', '\\"')
+    return "[" + ", ".join(f'"{escape(v)}"' for v in values) + "]"
 
 
 def write_config(
