@@ -20,7 +20,7 @@ type ExtensionPreferences = {
   "maxPapersPerDay": string,
   /** Lookback days - Maps to direction.lookback_days (catch-up window). */
   "lookbackDays": string,
-  /** Interest keyphrases - Comma-separated interest keyphrases (maps to direction.include_keywords). */
+  /** Required keywords - OR match: at least one keyword must appear in title or abstract (not all). Comma-separated; maps to direction.include_keywords. */
   "keyphrases": string,
   /** Allow categories - Comma-separated arXiv categories to include (maps to direction.allow_categories). */
   "allowCategories": string,
@@ -28,8 +28,8 @@ type ExtensionPreferences = {
   "denyCategories": string,
   /** Exclude keywords - Comma-separated keywords; papers matching these are excluded (maps to direction.exclude_keywords). */
   "excludeKeywords": string,
-  /** Discovery policy - How to rank/select arXiv papers: Deterministic (phrase match) or LinUCB (bandit + exploration). */
-  "policyType": "deterministic" | "linucb",
+  /** Discovery policy - Off: select by required-keyword match only (title first, then abstract). No scoring policy. */
+  "policyType": "off",
   /** Enable LLM research summary - When on, the three options below are used to generate research summaries. When off, they are ignored. */
   "summarizeEnabled": boolean,
   /** Summary provider - Only used when "Enable LLM research summary" is on. LLM provider (e.g. openai). */
@@ -38,6 +38,8 @@ type ExtensionPreferences = {
   "summarizeModel": string,
   /** Summary language - Only used when "Enable LLM research summary" is on. Maps to summarize.language. */
   "summarizeLanguage": "en" | "zh" | "ja" | "de",
+  /** OpenAI API Key - Optional. Used for LLM summaries when set. Leave empty to use OPENAI_API_KEY from your environment. */
+  "openaiApiKey": string,
   /** Enable Scholar Inbox - Toggle Google Scholar Alerts (email only). */
   "scholarEnabled": boolean,
   /** Scholar email provider - Email source: imap, gmail, mbox, or eml_dir. */
@@ -48,6 +50,8 @@ type ExtensionPreferences = {
   "scholarImapUser": string,
   /** Scholar IMAP password env var - Environment variable name for IMAP password (e.g. IMAP_PASSWORD). */
   "scholarImapPasswordEnv": string,
+  /** Scholar IMAP password - Optional. If set, used as the IMAP password (env var name above). Leave empty to use the value from your environment. */
+  "scholarImapPassword": string,
   /** Scholar Gmail label - Gmail label/mailbox to read (e.g. scholar-alerts). */
   "scholarGmailLabel": string,
   /** Scholar from addresses - Comma-separated sender addresses to filter (e.g. scholaralerts-noreply@google.com). Empty = no filter. */

@@ -66,8 +66,8 @@
     {
       "name": "keyphrases",
       "type": "textfield",
-      "title": "Interest keyphrases",
-      "description": "Comma-separated interest keyphrases (maps to direction.include_keywords).",
+      "title": "Required keywords",
+      "description": "OR match: at least one keyword must appear in title or abstract (not all). Comma-separated; maps to direction.include_keywords.",
       "placeholder": "continual learning, lifelong learning, incremental learning",
       "default": ""
     },
@@ -99,12 +99,11 @@
       "name": "policyType",
       "type": "dropdown",
       "title": "Discovery policy",
-      "description": "How to rank/select arXiv papers: Deterministic (phrase match) or LinUCB (bandit + exploration).",
+      "description": "Off: select by required-keyword match only (title first, then abstract). No scoring policy.",
       "data": [
-        { "title": "Deterministic", "value": "deterministic" },
-        { "title": "LinUCB", "value": "linucb" }
+        { "title": "Off", "value": "off" }
       ],
-      "default": "deterministic"
+      "default": "off"
     },
     {
       "name": "summarizeEnabled",
@@ -155,6 +154,14 @@
       "default": "en"
     },
     {
+      "name": "openaiApiKey",
+      "type": "password",
+      "title": "OpenAI API Key",
+      "description": "Optional. Used for LLM summaries when set. Leave empty to use OPENAI_API_KEY from your environment.",
+      "placeholder": "sk-...",
+      "default": ""
+    },
+    {
       "name": "scholarEnabled",
       "type": "checkbox",
       "title": "Enable Scholar Inbox",
@@ -192,6 +199,14 @@
       "description": "Environment variable name for IMAP password (e.g. IMAP_PASSWORD).",
       "placeholder": "IMAP_PASSWORD",
       "default": "IMAP_PASSWORD"
+    },
+    {
+      "name": "scholarImapPassword",
+      "type": "password",
+      "title": "Scholar IMAP password",
+      "description": "Optional. If set, used as the IMAP password (env var name above). Leave empty to use the value from your environment.",
+      "placeholder": "",
+      "default": ""
     },
     {
       "name": "scholarGmailLabel",

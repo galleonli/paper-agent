@@ -101,13 +101,11 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   email.mbox_path = "";
   email.eml_dir = "";
 
-  // Policy: set from preference (LinUCB or Deterministic)
-  if (prefs.policyType === "linucb" || prefs.policyType === "deterministic") {
-    if (!merged.policy || typeof merged.policy !== "object") {
-      merged.policy = {};
-    }
-    (merged.policy as Record<string, unknown>).type = prefs.policyType;
+  // Policy: set from preference (off = required-keyword match only)
+  if (!merged.policy || typeof merged.policy !== "object") {
+    merged.policy = {};
   }
+  (merged.policy as Record<string, unknown>).type = prefs.policyType ?? "off";
 
   return merged;
 }
@@ -118,13 +116,28 @@ function parseProcessedCount(stdout: string): number | undefined {
   return m ? parseInt(m[1], 10) : undefined;
 }
 
+/** Build env for the pipeline child: process.env plus optional secrets from Preferences. */
+function buildRunEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  const openaiKey = prefs.openaiApiKey?.trim();
+  if (openaiKey) {
+    env.OPENAI_API_KEY = openaiKey;
+  }
+  const imapEnvName = prefs.scholarImapPasswordEnv?.trim() || "IMAP_PASSWORD";
+  const imapPassword = prefs.scholarImapPassword?.trim();
+  if (imapPassword) {
+    env[imapEnvName] = imapPassword;
+  }
+  return env;
+}
+
 function runPipeline(configPath: string): Promise<{ success: boolean; stderr?: string; stdout?: string }> {
   return new Promise((resolve) => {
     let stderr = "";
     let stdout = "";
     const proc = spawn(PYTHON_BIN, ["-m", "paper_agent", "run", "--config", configPath], {
       cwd: AGENT_ROOT,
-      env: process.env,
+      env: buildRunEnv(),
     });
     proc.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -213,6 +226,15 @@ function prepareRun(): PrepareResult {
     }
     if (!(prefs.scholarImapPasswordEnv?.trim() ?? "")) {
       return { ok: false, title: "Invalid preference", message: "Scholar IMAP password env var is required when Scholar Inbox is enabled." };
+    }
+    const imapEnvName = prefs.scholarImapPasswordEnv?.trim() || "IMAP_PASSWORD";
+    const hasImapPassword = !!(prefs.scholarImapPassword?.trim() || process.env[imapEnvName]);
+    if (!hasImapPassword) {
+      return {
+        ok: false,
+        title: "Scholar IMAP password required",
+        message: "Set 'Scholar IMAP password' in Preferences or set the env var (e.g. IMAP_PASSWORD) so Raycast can pass it to the pipeline.",
+      };
     }
   }
   const merged = mergeConfig(base);
