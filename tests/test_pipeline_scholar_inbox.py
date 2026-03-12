@@ -3,76 +3,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from paper_agent.core.models import Paper
 from paper_agent.core.utils import safe_paper_id_for_path
 from paper_agent.pipeline import run as pipeline_run
 from paper_agent.filter_papers import RankedPaper
 from paper_agent.selection import select_topk as real_select_topk
+from tests.helpers import make_paper, write_config
 
 
 def _config_with_scholar(tmp_path: Path) -> Path:
     """Build a config with small discovery quota and Scholar Inbox enabled."""
-    cfg = f"""
-interests:
-  seeds: []
-direction:
-  max_papers_per_day: 2
-  lookback_days: 7
-  allow_categories: ["cs.LG"]
-  deny_categories: []
-  queries: []
-  include_keywords: []
-  exclude_keywords: []
-delivery:
-  library_dir: "{(tmp_path / "library").as_posix()}"
-  paper_dir: "{(tmp_path / "daily").as_posix()}"
-  state_dir: "{(tmp_path / "state").as_posix()}"
-  logs_dir: "{(tmp_path / "logs").as_posix()}"
-summarize:
-  enabled: false
-  provider: openai
-  model: gpt-4o-mini
-  language: en
-export:
-  formats: ["bibtex", "ris"]
-sources:
-  arxiv:
-    enabled: true
-  scholar_alerts:
-    enabled: true
-    mode: "email"
-    email:
-      provider: "eml_dir"
-      eml_dir: ""
-      mbox_path: ""
-      from_addresses: []
-    max_items_per_run: 10
-    light_filter:
-      include_keywords: []
-      exclude_keywords: []
-    ordering: "arrival"
-feedback:
-  blocked_phrases: []
-  blocked_authors: []
-  boosted_phrases: []
-selection:
-  explore_ratio: 0.2
-  topic_cap: 3
-  min_topics: 1
-policy:
-  type: "deterministic"
-  alpha: 0.5
-  lambda_ucb: 1.0
-  mu_novelty: 0.3
-  ridge: 1.0
-advanced:
-  request_timeout_seconds: 30
-  max_retries: 3
-  max_results_per_query: 50
-"""
-    path = tmp_path / "config.yaml"
-    path.write_text(cfg, encoding="utf-8")
-    return path
+    return write_config(
+        tmp_path,
+        arxiv_enabled=True,
+        scholar_enabled=True,
+        max_papers_per_day=2,
+        lookback_days=7,
+    )
 
 
 def test_quota_semantics(tmp_path: Path) -> None:
@@ -83,32 +29,17 @@ def test_quota_semantics(tmp_path: Path) -> None:
     config_path = _config_with_scholar(tmp_path)
 
     # Discovery candidates: 5 papers, but policy/selection should cap at 2.
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    discovery_papers = [
-        Paper(
-            id=f"disc-{i}",
-            title=f"Discovery {i}",
-            summary="Abstract",
-            authors=["Alice"],
-            categories=["cs.LG"],
-            updated=now_iso,
-            link_abs=f"https://arxiv.org/abs/disc-{i}",
-            link_pdf=None,
-        )
-        for i in range(5)
-    ]
+    discovery_papers = [make_paper(f"disc-{i}", title=f"Discovery {i}") for i in range(5)]
 
     # Scholar Inbox: 5 papers, treated separately.
     scholar_papers = [
-        Paper(
-            id=f"scholar-{i}",
+        make_paper(
+            f"scholar-{i}",
             title=f"Scholar {i}",
             summary="",
             authors=["Bob"],
             categories=[],
-            updated=now_iso,
             link_abs=f"https://example.com/scholar/{i}",
-            link_pdf=None,
         )
         for i in range(5)
     ]
@@ -151,29 +82,15 @@ def test_scholar_bypass_constraints(tmp_path: Path) -> None:
     """
     config_path = _config_with_scholar(tmp_path)
 
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    discovery_papers = [
-        Paper(
-            id="disc-1",
-            title="Discovery 1",
-            summary="Abstract",
-            authors=["Alice"],
-            categories=["cs.LG"],
-            updated=now_iso,
-            link_abs="https://arxiv.org/abs/disc-1",
-            link_pdf=None,
-        )
-    ]
+    discovery_papers = [make_paper("disc-1", title="Discovery 1")]
     scholar_papers = [
-        Paper(
-            id="scholar-1",
+        make_paper(
+            "scholar-1",
             title="Scholar 1",
             summary="",
             authors=["Bob"],
             categories=[],
-            updated=now_iso,
             link_abs="https://example.com/scholar/1",
-            link_pdf=None,
         )
     ]
 
@@ -218,19 +135,7 @@ def test_seen_merge_preserves_scholar_ids_after_pipeline_save(tmp_path: Path) ->
     cfg_text = cfg_text.replace("from_addresses: []", 'from_addresses: ["scholaralerts-noreply@google.com"]')
     config_path.write_text(cfg_text, encoding="utf-8")
 
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    discovery_papers = [
-        Paper(
-            id="disc-merge-1",
-            title="Discovery Merge 1",
-            summary="Abstract",
-            authors=["Alice"],
-            categories=["cs.LG"],
-            updated=now_iso,
-            link_abs="https://arxiv.org/abs/disc-merge-1",
-            link_pdf=None,
-        )
-    ]
+    discovery_papers = [make_paper("disc-merge-1", title="Discovery Merge 1")]
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=discovery_papers):
         first = pipeline_run(config_path)
@@ -255,30 +160,15 @@ def test_bibtex_ris_only_for_discovery_not_scholar(tmp_path: Path) -> None:
     papers only; Scholar Inbox items get .md/.json but no .bib/.ris.
     """
     config_path = _config_with_scholar(tmp_path)
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    discovery_papers = [
-        Paper(
-            id="disc-export-1",
-            title="Discovery Export 1",
-            summary="Abstract",
-            authors=["Alice"],
-            categories=["cs.LG"],
-            updated=now_iso,
-            link_abs="https://arxiv.org/abs/disc-export-1",
-            link_pdf=None,
-        )
-    ]
+    discovery_papers = [make_paper("disc-export-1", title="Discovery Export 1")]
     scholar_papers = [
-        Paper(
-            id="scholar:arxiv:2501.00001",
+        make_paper(
+            "scholar:arxiv:2501.00001",
             title="Scholar Export Check",
             summary="",
             authors=["Bob"],
             categories=[],
-            updated=now_iso,
             link_abs="https://arxiv.org/abs/2501.00001",
-            link_pdf=None,
         )
     ]
 
@@ -307,30 +197,15 @@ def test_bibtex_ris_only_for_discovery_not_scholar(tmp_path: Path) -> None:
 def test_research_summary_is_discovery_only_not_scholar(tmp_path: Path) -> None:
     """Pipeline should call research-summary builder only for discovery items."""
     config_path = _config_with_scholar(tmp_path)
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    discovery_papers = [
-        Paper(
-            id="disc-summary-1",
-            title="Discovery Summary 1",
-            summary="Abstract",
-            authors=["Alice"],
-            categories=["cs.LG"],
-            updated=now_iso,
-            link_abs="https://arxiv.org/abs/disc-summary-1",
-            link_pdf=None,
-        )
-    ]
+    discovery_papers = [make_paper("disc-summary-1", title="Discovery Summary 1")]
     scholar_papers = [
-        Paper(
-            id="scholar:arxiv:2601.00001",
+        make_paper(
+            "scholar:arxiv:2601.00001",
             title="Scholar Summary Check",
             summary="",
             authors=["Bob"],
             categories=[],
-            updated=now_iso,
             link_abs="https://arxiv.org/abs/2601.00001",
-            link_pdf=None,
         )
     ]
 

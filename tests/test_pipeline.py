@@ -1,121 +1,21 @@
 """Pipeline tests: run with arXiv disabled; policy+selection produce RankedPaper with why_this_paper."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from paper_agent.core.models import Paper
 from paper_agent.filter_papers import RankedPaper
 from paper_agent.pipeline import run as pipeline_run
 from paper_agent.run import run
-
-
-def _paper(paper_id: str, title: str = "Test Paper", days_ago: int = 0) -> Paper:
-    """Build a paper within lookback by default."""
-    updated = (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return Paper(
-        id=paper_id,
-        title=title,
-        summary="Abstract here.",
-        authors=["Alice"],
-        categories=["cs.LG"],
-        updated=updated,
-        link_abs=f"https://arxiv.org/abs/{paper_id}",
-        link_pdf=None,
-    )
-
-
-def _minimal_config(tmp_path: Path, **kwargs: str) -> str:
-    base = """
-interests:
-  seeds: []
-direction:
-  max_papers_per_day: 5
-  lookback_days: 3
-  allow_categories: ["cs.LG"]
-  deny_categories: []
-  queries: []
-  include_keywords: []
-  exclude_keywords: []
-delivery:
-  library_dir: "{library_dir}"
-  paper_dir: "{paper_dir}"
-  state_dir: "{state_dir}"
-  logs_dir: "{logs_dir}"
-summarize:
-  enabled: false
-  provider: "openai"
-  model: "gpt-4o-mini"
-  language: "en"
-export:
-  formats: ["bibtex", "ris"]
-sources:
-  arxiv:
-    enabled: false
-  scholar_alerts:
-    enabled: false
-feedback:
-  blocked_phrases: []
-  blocked_authors: []
-  boosted_phrases: []
-selection:
-  explore_ratio: 0.2
-  topic_cap: 3
-  min_topics: 1
-policy:
-  type: "deterministic"
-  alpha: 0.5
-  lambda_ucb: 1.0
-  mu_novelty: 0.3
-  ridge: 1.0
-advanced:
-  request_timeout_seconds: 30
-  max_retries: 3
-  max_results_per_query: 50
-"""
-    return base.format(
-        library_dir=(tmp_path / "library").as_posix(),
-        paper_dir=(tmp_path / "daily").as_posix(),
-        state_dir=(tmp_path / "state").as_posix(),
-        logs_dir=(tmp_path / "logs").as_posix(),
-        **kwargs,
-    )
-
-
-def _write_config(
-    tmp_path: Path,
-    *,
-    arxiv_enabled: bool = False,
-    policy_type: str = "deterministic",
-    autotune_block: str = "",
-    summarize_enabled: bool = False,
-) -> Path:
-    """Write config.yaml for tests with small targeted toggles."""
-    cfg = _minimal_config(tmp_path)
-    cfg = cfg.replace('type: "deterministic"', f'type: "{policy_type}"')
-    cfg = cfg.replace(
-        "sources:\n  arxiv:\n    enabled: false",
-        f"sources:\n  arxiv:\n    enabled: {str(arxiv_enabled).lower()}",
-    )
-    if summarize_enabled:
-        cfg = cfg.replace(
-            "summarize:\n  enabled: false\n  provider: openai\n  model: gpt-4o-mini\n  language: en",
-            "summarize:\n  enabled: true\n  provider: openai\n  model: gpt-4o-mini\n  language: en",
-        )
-    if autotune_block:
-        cfg += autotune_block
-    path = tmp_path / "config.yaml"
-    path.write_text(cfg, encoding="utf-8")
-    return path
+from tests.helpers import make_paper, write_config
 
 
 def test_run_with_arxiv_disabled_returns_list(tmp_path: Path) -> None:
     """With sources.arxiv.enabled=false, pipeline runs and returns a list (no fetch)."""
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(_minimal_config(tmp_path), encoding="utf-8")
+    config_path = write_config(tmp_path)
     result = run(config_path)
     assert isinstance(result, list)
     assert len(result) == 0
@@ -123,8 +23,7 @@ def test_run_with_arxiv_disabled_returns_list(tmp_path: Path) -> None:
 
 def test_run_creates_logs_file(tmp_path: Path) -> None:
     """Pipeline run always creates logs/latest.log with a summary line."""
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(_minimal_config(tmp_path), encoding="utf-8")
+    config_path = write_config(tmp_path)
     run(config_path)
     log_path = tmp_path / "logs" / "latest.log"
     assert log_path.exists()
@@ -138,8 +37,8 @@ def test_run_creates_logs_file(tmp_path: Path) -> None:
 
 def test_run_returns_ranked_papers_with_why_this_paper_when_new_items(tmp_path: Path) -> None:
     """When there are new papers, pipeline returns RankedPaper with why_this_paper."""
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    fake_paper = _paper("2301.12345")
+    config_path = write_config(tmp_path, arxiv_enabled=True)
+    fake_paper = make_paper("2301.12345")
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         result = pipeline_run(config_path)
     assert len(result) == 1
@@ -151,7 +50,7 @@ def test_run_with_linucb_policy_logs_diversity_metrics(tmp_path: Path, caplog: p
     """With policy.type=linucb, pipeline runs and log line includes num_topics and exploration_picks."""
     import logging
     caplog.set_level(logging.INFO)  # noqa: F811
-    config_path = _write_config(tmp_path, policy_type="linucb")
+    config_path = write_config(tmp_path, policy_type="linucb")
     run(config_path)
     log_text = caplog.text
     assert "num_topics=" in log_text
@@ -162,8 +61,8 @@ def test_pipeline_still_saves_seen_and_no_repush(tmp_path: Path) -> None:
     """Seen state is saved so next run with same input has 0 new papers."""
     state_dir = tmp_path / "state"
     state_dir.mkdir(parents=True)
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    fake_paper = _paper("2301.99999")
+    config_path = write_config(tmp_path, arxiv_enabled=True)
+    fake_paper = make_paper("2301.99999")
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         result = pipeline_run(config_path)
@@ -202,10 +101,10 @@ autotune:
       mu_novelty: 0.3
       ridge: 1.0
 """
-    config_path = _write_config(
+    config_path = write_config(
         tmp_path,
         policy_type="linucb",
-        autotune_block=autotune_block,
+        extra_yaml=autotune_block,
     )
     config_content = config_path.read_text(encoding="utf-8")
 
@@ -250,7 +149,7 @@ autotune:
       mu_novelty: 0.3
       ridge: 1.0
 """
-    config_path = _write_config(tmp_path, autotune_block=autotune_block)
+    config_path = write_config(tmp_path, extra_yaml=autotune_block)
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[]):
         run(config_path)
@@ -261,8 +160,8 @@ autotune:
 
 def test_summarize_disabled_makes_no_llm_calls(tmp_path: Path) -> None:
     """When summarize.enabled=false, pipeline never calls the LLM helper."""
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    fake_paper = _paper("2403.00001", title="No LLM Call Test")
+    config_path = write_config(tmp_path, arxiv_enabled=True)
+    fake_paper = make_paper("2403.00001", title="No LLM Call Test")
 
     with (
         patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]),
@@ -284,9 +183,9 @@ def test_catch_up_lookback_and_seen_behavior(tmp_path: Path) -> None:
     - out-of-window items are ignored,
     - already-seen items are not reprocessed.
     """
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    recent = _paper("2403.00002", title="Recent Paper", days_ago=1)
-    old = _paper("2403.99999", title="Old Paper", days_ago=10)
+    config_path = write_config(tmp_path, arxiv_enabled=True)
+    recent = make_paper("2403.00002", title="Recent Paper", days_ago=1)
+    old = make_paper("2403.99999", title="Old Paper", days_ago=10)
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[recent, old]):
         first = pipeline_run(config_path)
@@ -308,8 +207,8 @@ def test_idempotency_no_duplicate_artifacts(tmp_path: Path) -> None:
     Running twice with no new input:
     - no duplicate notes.
     """
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    fake_paper = _paper("2403.00003", title="Artifact Test Paper")
+    config_path = write_config(tmp_path, arxiv_enabled=True)
+    fake_paper = make_paper("2403.00003", title="Artifact Test Paper")
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         first = pipeline_run(config_path)
@@ -334,13 +233,9 @@ def test_pipeline_respects_export_formats_toggle(tmp_path: Path) -> None:
     When export.formats is empty, pipeline still writes notes
     but does not create BibTeX/RIS artifacts.
     """
-    config_path = _write_config(tmp_path, arxiv_enabled=True)
-    # Disable all export formats for this run.
-    cfg = config_path.read_text(encoding="utf-8")
-    cfg = cfg.replace('formats: ["bibtex", "ris"]', "formats: []")
-    config_path.write_text(cfg, encoding="utf-8")
+    config_path = write_config(tmp_path, arxiv_enabled=True, export_formats=[])
 
-    fake_paper = _paper("2403.12345", title="No Export Formats Paper")
+    fake_paper = make_paper("2403.12345", title="No Export Formats Paper")
 
     with patch("paper_agent.pipeline.fetch_arxiv", return_value=[fake_paper]):
         result = pipeline_run(config_path)
@@ -364,12 +259,12 @@ def test_pipeline_writes_research_summary_in_note_when_summarize_and_api_used(tm
     the pipeline must write a note that contains the Research-focused summary section.
     Proves the API path is wired into the pipeline and note output.
     """
-    config_path = _write_config(
+    config_path = write_config(
         tmp_path,
         arxiv_enabled=True,
         summarize_enabled=True,
     )
-    fake_paper = _paper("2501.11111", title="Test Paper For Summary")
+    fake_paper = make_paper("2501.11111", title="Test Paper For Summary")
     mocked_summary_body = "MOCKED_RESEARCH_SUMMARY_FROM_API_XYZ"
 
     with (

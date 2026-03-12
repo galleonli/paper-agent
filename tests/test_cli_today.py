@@ -7,47 +7,20 @@ from io import StringIO
 from pathlib import Path
 
 from paper_agent.cli import main as cli_main
-from tests.test_pipeline import _minimal_config
-
-
-def _write_config(tmp_path: Path) -> Path:
-    """Write a minimal config.yaml pointing library_dir to tmp."""
-    cfg_text = _minimal_config(tmp_path)
-    path = tmp_path / "config.yaml"
-    path.write_text(cfg_text, encoding="utf-8")
-    return path
-
-
-def _write_paper_json(
-    day_dir: Path,
-    filename: str,
-    *,
-    paper_id: str,
-    title: str,
-    published: str | None,
-) -> None:
-    payload = {
-        "id": paper_id,
-        "title": title,
-        "date": day_dir.name,
-        "published": published,
-        "link": f"https://example.com/{paper_id}",
-        "note_path": f"library/{day_dir.name}/{paper_id}.md",
-    }
-    (day_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
+from tests.helpers import write_config, write_paper_json
 
 
 def test_today_json_sorts_by_published_then_date(tmp_path: Path, monkeypatch) -> None:
     """today --json returns today's papers sorted by published (or date) descending."""
     # Prepare config and library structure.
-    config_path = _write_config(tmp_path)
+    config_path = write_config(tmp_path)
     library_dir = tmp_path / "library"
     today_str = date.today().isoformat()
     day_dir = library_dir / today_str
     day_dir.mkdir(parents=True)
 
     # Older published date but higher lexicographically smaller id.
-    _write_paper_json(
+    write_paper_json(
         day_dir,
         "a.json",
         paper_id="paper-old",
@@ -55,7 +28,7 @@ def test_today_json_sorts_by_published_then_date(tmp_path: Path, monkeypatch) ->
         published="2024-01-01",
     )
     # Newer published date should come first.
-    _write_paper_json(
+    write_paper_json(
         day_dir,
         "b.json",
         paper_id="paper-new",
@@ -63,7 +36,7 @@ def test_today_json_sorts_by_published_then_date(tmp_path: Path, monkeypatch) ->
         published="2024-03-10",
     )
     # No published date: falls back to date; should come after both.
-    _write_paper_json(
+    write_paper_json(
         day_dir,
         "c.json",
         paper_id="paper-nopub",
@@ -98,7 +71,7 @@ def test_today_json_sorts_by_published_then_date(tmp_path: Path, monkeypatch) ->
 
 def test_list_json_sorts_by_published_then_date_and_respects_limit(tmp_path: Path, monkeypatch) -> None:
     """list --json [--limit] returns recent papers sorted by published (or date) descending."""
-    config_path = _write_config(tmp_path)
+    config_path = write_config(tmp_path)
     library_dir = tmp_path / "library"
 
     # Two days of data: 2025-01-03 (newer) and 2025-01-02 (older).
@@ -108,7 +81,7 @@ def test_list_json_sorts_by_published_then_date_and_respects_limit(tmp_path: Pat
     d_old.mkdir(parents=True)
 
     # Newer published date on newer day.
-    _write_paper_json(
+    write_paper_json(
         d_new,
         "a.json",
         paper_id="p-new",
@@ -116,7 +89,7 @@ def test_list_json_sorts_by_published_then_date_and_respects_limit(tmp_path: Pat
         published="2025-01-10",
     )
     # Older published date on newer day.
-    _write_paper_json(
+    write_paper_json(
         d_new,
         "b.json",
         paper_id="p-mid",
@@ -124,7 +97,7 @@ def test_list_json_sorts_by_published_then_date_and_respects_limit(tmp_path: Pat
         published="2025-01-05",
     )
     # Published on older day, should come last.
-    _write_paper_json(
+    write_paper_json(
         d_old,
         "c.json",
         paper_id="p-old",
