@@ -20,7 +20,7 @@ def load_preferences(
     d: int,
     ridge: float = 1.0,
     feature_names: list[str] | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list]:
     """
     Load theta, A_inv, and feature_names from state_dir/preferences.json.
     If file missing or invalid, return cold-start: theta = zeros(d), A_inv = I/ridge, feature_names as given.

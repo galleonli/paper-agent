@@ -31,8 +31,9 @@ def select_topk(
     n_explore = k - n_exploit
 
     if n <= k:
-        # Apply topic cap and take up to k; still mark explore_ratio*k as exploration_pick
-        capped = _apply_topic_cap(scored, topic_cap)[:k]
+        # Sort by score first, then apply topic cap and take up to k; mark explore_ratio*k as exploration_pick
+        by_score = sorted(scored, key=lambda s: s.score, reverse=True)
+        capped = _apply_topic_cap(by_score, topic_cap)[:k]
         n_explore_actual = min(len(capped), n_explore)
         if n_explore_actual <= 0:
             return capped

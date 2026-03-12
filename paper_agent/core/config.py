@@ -3,7 +3,7 @@ Load and validate config from YAML. Fail fast with clear errors.
 
 Schema and default values are aligned with config.example.yaml:
 - direction: max_papers_per_day=15, lookback_days=3
-- policy.type: "linucb"
+- policy.type: "deterministic"
 - sources.scholar_alerts: mode=email, email.provider (mbox/eml_dir/gmail/imap), light_filter, ordering=arrival only.
 - Scholar Inbox never counts toward max_papers_per_day and never participates in exploration/diversity (hardcoded).
 """
@@ -281,7 +281,7 @@ class SelectionConfig(BaseModel):
 class PolicyConfig(BaseModel):
     """Policy: deterministic or LinUCB; UCB/novelty weights for bandit."""
 
-    type: str = Field(default="linucb", description="Policy: 'deterministic' or 'linucb'")
+    type: str = Field(default="deterministic", description="Policy: 'deterministic' or 'linucb'")
     alpha: float = Field(default=0.5, ge=0.0, le=5.0, description="LinUCB uncertainty scale")
     lambda_ucb: float = Field(default=1.0, ge=0.0, le=5.0, description="Weight for uncertainty in selection score")
     mu_novelty: float = Field(default=0.3, ge=0.0, le=5.0, description="Weight for novelty in selection score")
