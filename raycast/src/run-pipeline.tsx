@@ -1,8 +1,9 @@
-import { getPreferenceValues, showToast, Toast } from "@raycast/api";
+import { Detail, getPreferenceValues, popToRoot, showToast, Toast } from "@raycast/api";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
 import * as os from "node:os";
+import { useEffect } from "react";
 import yaml from "js-yaml";
 import { applyPaperDirOverride, getPaperDirFromConfigObject } from "./config-utils";
 
@@ -133,57 +134,36 @@ function runPipeline(configPath: string): Promise<{ success: boolean; stderr?: s
   });
 }
 
-export default async function Command() {
+type PrepareResult =
+  | { ok: true; tempConfigPath: string }
+  | { ok: false; title: string; message?: string };
+
+function prepareRun(): PrepareResult {
   if (!CONFIG_PATH) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Config path required",
-      message: "Set Config file path in extension Preferences.",
-    });
-    return;
+    return { ok: false, title: "Config path required", message: "Set Config file path in extension Preferences." };
   }
-
   if (!fs.existsSync(CONFIG_PATH)) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Config not found",
-      message: CONFIG_PATH,
-    });
-    return;
+    return { ok: false, title: "Config not found", message: CONFIG_PATH };
   }
-
   let base: Record<string, unknown>;
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
     const loaded = yaml.load(raw);
     if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Invalid config",
-        message: "Config must be a YAML object, not a string or array.",
-      });
-      return;
+      return { ok: false, title: "Invalid config", message: "Config must be a YAML object, not a string or array." };
     }
     base = loaded as Record<string, unknown>;
   } catch (e) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Invalid config YAML",
-      message: e instanceof Error ? e.message : String(e),
-    });
-    return;
+    return { ok: false, title: "Invalid config YAML", message: e instanceof Error ? e.message : String(e) };
   }
-
   const effectivePaperDir = PREF_PAPER_DIR || getPaperDirFromConfigObject(base);
   if (!effectivePaperDir) {
-    await showToast({
-      style: Toast.Style.Failure,
+    return {
+      ok: false,
       title: "Paper directory not set",
       message: "Set 'Paper directory' in Preferences or config.yaml delivery.paper_dir.",
-    });
-    return;
+    };
   }
-
   const merged = mergeConfig(base);
   const tempConfigPath = path.join(
     os.tmpdir(),
@@ -192,42 +172,80 @@ export default async function Command() {
   try {
     fs.writeFileSync(tempConfigPath, yaml.dump(merged), "utf-8");
   } catch (e) {
-    await showToast({
-      style: Toast.Style.Failure,
+    return {
+      ok: false,
       title: "Failed to write temp config",
       message: e instanceof Error ? e.message : String(e),
-    });
-    return;
+    };
   }
+  return { ok: true, tempConfigPath };
+}
 
-  try {
-    await showToast({
-      style: Toast.Style.Animated,
-      title: "Running Paper Agent…",
-    });
-
-    const { success, stderr } = await runPipeline(tempConfigPath);
-
-    if (success) {
-      await showToast({
-        style: Toast.Style.Success,
-        title: "Paper Agent finished",
-      });
-    } else {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Paper Agent failed",
-        message: stderr ? stderr.slice(0, 200) : undefined,
-      });
-    }
-  } finally {
-    try {
-      if (fs.existsSync(tempConfigPath)) {
-        fs.unlinkSync(tempConfigPath);
+function RunPipelineView() {
+  useEffect(() => {
+    let cancelled = false;
+    let tempConfigPath: string | null = null;
+    const run = async () => {
+      try {
+        const prepared = prepareRun();
+        if (!prepared.ok) {
+          if (!cancelled) {
+            await showToast({ style: Toast.Style.Failure, title: prepared.title, message: prepared.message });
+          }
+          return;
+        }
+        tempConfigPath = prepared.tempConfigPath;
+        const { success, stderr } = await runPipeline(tempConfigPath);
+        if (cancelled) return;
+        if (!cancelled) {
+          if (success) {
+            await showToast({ style: Toast.Style.Success, title: "Paper Agent finished" });
+          } else {
+            await showToast({
+              style: Toast.Style.Failure,
+              title: "Paper Agent failed",
+              message: stderr ? stderr.slice(0, 200) : undefined,
+            });
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          await showToast({
+            style: Toast.Style.Failure,
+            title: "Paper Agent error",
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } finally {
+        if (tempConfigPath) {
+          try {
+            if (fs.existsSync(tempConfigPath)) {
+              fs.unlinkSync(tempConfigPath);
+            }
+          } catch {
+            // ignore cleanup errors
+          }
+        }
+        if (!cancelled) {
+          await popToRoot({ clearSearchBar: true });
+        }
       }
-    } catch {
-      // ignore cleanup errors
-    }
-  }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
+  return (
+    <Detail
+      isLoading={true}
+      markdown="Running Paper Agent…"
+      navigationTitle="Run Paper Agent"
+    />
+  );
+}
+
+export default function Command() {
+  return <RunPipelineView />;
 }

@@ -237,7 +237,7 @@
       "title": "Run Paper Agent",
       "subtitle": "Run the full pipeline once",
       "description": "Runs paper_agent run with config merged from YAML and extension preferences (preferences override).",
-      "mode": "no-view"
+      "mode": "view"
     },
     {
       "name": "open-paper-repo",
