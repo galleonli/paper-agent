@@ -2,15 +2,16 @@ import { ActionPanel, List, Action, getPreferenceValues } from "@raycast/api";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { useMemo, useState } from "react";
-import { resolveDeliveryDirs, withEffectiveConfigPath } from "./config-utils";
+import { withEffectiveConfigPath } from "./config-utils";
 import { type Paper, parseCliPapers, renderPaperDetailMarkdown } from "./paper-utils";
 
 const prefs = getPreferenceValues<Preferences.SearchPapers>();
 const CONFIG_PATH = prefs.configPath?.trim() ?? "";
 const HAS_CONFIG = CONFIG_PATH.length > 0;
 const PREF_PAPER_DIR = prefs.paperDir?.trim() ?? "";
-const { paperDir: PAPER_DIR, libraryDir: LIBRARY_DIR } = resolveDeliveryDirs(CONFIG_PATH, PREF_PAPER_DIR);
-const HAS_PAPER_DIR = PAPER_DIR.length > 0;
+const PAPER_DIR = PREF_PAPER_DIR;
+const LIBRARY_DIR = PREF_PAPER_DIR ? path.join(PREF_PAPER_DIR, "library") : "";
+const HAS_PAPER_DIR = PREF_PAPER_DIR.length > 0;
 const AGENT_ROOT = HAS_CONFIG ? path.dirname(CONFIG_PATH) : "";
 const PYTHON_BIN =
   prefs.pythonPath && prefs.pythonPath.trim().length > 0
@@ -55,7 +56,7 @@ export default function Command() {
       {(!HAS_CONFIG || !HAS_PAPER_DIR) && (
         <List.EmptyView
           title="Set preferences first"
-          description="Set 'Config file path' in preferences. 'Paper directory' can be set in preferences or config.yaml (delivery.paper_dir)."
+          description="Set both 'Config file path' and 'Paper directory' in extension preferences."
         />
       )}
       {HAS_CONFIG && HAS_PAPER_DIR && papers.length === 0 && (

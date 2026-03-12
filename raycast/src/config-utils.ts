@@ -93,12 +93,12 @@ export function withEffectiveConfigPath<T>(
 ): T {
   const preferred = prefPaperDir.trim();
   if (!preferred) {
-    return runner(configPath);
+    throw new Error("Paper directory is required in extension Preferences.");
   }
 
   const config = readConfigObject(configPath);
   if (!config) {
-    return runner(configPath);
+    throw new Error("Config file is missing or invalid.");
   }
 
   let tempConfigPath = "";
@@ -110,8 +110,6 @@ export function withEffectiveConfigPath<T>(
     );
     fs.writeFileSync(tempConfigPath, yaml.dump(merged), "utf-8");
     return runner(tempConfigPath);
-  } catch {
-    return runner(configPath);
   } finally {
     if (tempConfigPath && fs.existsSync(tempConfigPath)) {
       try {
