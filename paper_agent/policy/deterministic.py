@@ -5,7 +5,7 @@ Deterministic policy: score from phrase matches and penalties; why_this_paper; u
 from paper_agent.core.config import Config
 from paper_agent.core.models import Paper
 from paper_agent.core.state import paper_id_in_seeds
-from paper_agent.core.utils import normalize_text, text_matches_any
+from paper_agent.core.utils import normalize_text, phrases_matching_text, text_matches_any
 from paper_agent.filter_papers import build_why_this_paper
 from paper_agent.policy.base import PolicyContext, ScoredPaper
 
@@ -34,9 +34,15 @@ class DeterministicPolicy:
             ):
                 continue
 
-            why = build_why_this_paper(paper, keyphrases, seeds)
+            title_match = bool(keyphrases) and text_matches_any(normalize_text(paper.title), keyphrases)
+            abstract_match = bool(keyphrases) and text_matches_any(normalize_text(paper.summary), keyphrases)
+            why = build_why_this_paper(
+                paper, keyphrases, seeds, title_match=title_match, abstract_match=abstract_match
+            )
             score = 1.0
-            matched = [p for p in keyphrases if p and normalize_text(p) in combined]
+            matched = list(
+                set(phrases_matching_text(paper.title, keyphrases) + phrases_matching_text(paper.summary, keyphrases))
+            )
             score += 0.1 * len(matched)
             for p in boosted_phrases:
                 if p and normalize_text(p) in combined:
