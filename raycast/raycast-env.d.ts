@@ -36,8 +36,20 @@ type ExtensionPreferences = {
   "summarizeModel": string,
   /** Summary language - Only used when "Enable LLM research summary" is on. Maps to summarize.language. */
   "summarizeLanguage": "en" | "zh" | "ja" | "de",
-  /** Enable Scholar Inbox - Toggles sources.scholar_alerts.enabled in config.yaml. */
-  "scholarEnabled": boolean
+  /** Enable Scholar Inbox - Toggle Google Scholar Alerts (email only). */
+  "scholarEnabled": boolean,
+  /** Scholar email provider - Email source: imap, gmail, mbox, or eml_dir. */
+  "scholarProvider": string,
+  /** Scholar IMAP host - IMAP host for Scholar Alerts (e.g. imap.gmail.com). */
+  "scholarImapHost": string,
+  /** Scholar IMAP user - IMAP user / email for Scholar Alerts. */
+  "scholarImapUser": string,
+  /** Scholar IMAP password env var - Environment variable name for IMAP password (e.g. IMAP_PASSWORD). */
+  "scholarImapPasswordEnv": string,
+  /** Scholar Gmail label - Gmail label/mailbox to read (e.g. scholar-alerts). */
+  "scholarGmailLabel": string,
+  /** Scholar from addresses - Comma-separated sender addresses to filter (e.g. scholaralerts-noreply@google.com). Empty = no filter. */
+  "scholarFromAddresses": string
 }
 
 /** Preferences accessible in all the extension's commands */
@@ -50,6 +62,8 @@ declare namespace Preferences {
   export type RecentPapers = ExtensionPreferences & {}
   /** Preferences accessible in the `search-papers` command */
   export type SearchPapers = ExtensionPreferences & {}
+  /** Preferences accessible in the `run-pipeline` command */
+  export type RunPipeline = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -59,5 +73,7 @@ declare namespace Arguments {
   export type RecentPapers = {}
   /** Arguments passed to the `search-papers` command */
   export type SearchPapers = {}
+  /** Arguments passed to the `run-pipeline` command */
+  export type RunPipeline = {}
 }
 

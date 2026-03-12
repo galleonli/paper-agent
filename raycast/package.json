@@ -135,8 +135,56 @@
       "name": "scholarEnabled",
       "type": "checkbox",
       "title": "Enable Scholar Inbox",
-      "description": "Toggles sources.scholar_alerts.enabled in config.yaml.",
+      "description": "Toggle Google Scholar Alerts (email only).",
       "default": true
+    },
+    {
+      "name": "scholarProvider",
+      "type": "textfield",
+      "title": "Scholar email provider",
+      "description": "Email source: imap, gmail, mbox, or eml_dir.",
+      "placeholder": "imap",
+      "default": ""
+    },
+    {
+      "name": "scholarImapHost",
+      "type": "textfield",
+      "title": "Scholar IMAP host",
+      "description": "IMAP host for Scholar Alerts (e.g. imap.gmail.com).",
+      "placeholder": "imap.gmail.com",
+      "default": ""
+    },
+    {
+      "name": "scholarImapUser",
+      "type": "textfield",
+      "title": "Scholar IMAP user",
+      "description": "IMAP user / email for Scholar Alerts.",
+      "placeholder": "your@gmail.com",
+      "default": ""
+    },
+    {
+      "name": "scholarImapPasswordEnv",
+      "type": "textfield",
+      "title": "Scholar IMAP password env var",
+      "description": "Environment variable name for IMAP password (e.g. IMAP_PASSWORD).",
+      "placeholder": "IMAP_PASSWORD",
+      "default": "IMAP_PASSWORD"
+    },
+    {
+      "name": "scholarGmailLabel",
+      "type": "textfield",
+      "title": "Scholar Gmail label",
+      "description": "Gmail label/mailbox to read (e.g. scholar-alerts).",
+      "placeholder": "scholar-alerts",
+      "default": ""
+    },
+    {
+      "name": "scholarFromAddresses",
+      "type": "textfield",
+      "title": "Scholar from addresses",
+      "description": "Comma-separated sender addresses to filter (e.g. scholaralerts-noreply@google.com). Empty = no filter.",
+      "placeholder": "scholaralerts-noreply@google.com",
+      "default": ""
     }
   ],
   "commands": [
@@ -160,11 +208,19 @@
       "subtitle": "Search local Paper Agent library",
       "description": "Search papers in your local library by title, authors, summary, and more.",
       "mode": "view"
+    },
+    {
+      "name": "run-pipeline",
+      "title": "Run Paper Agent",
+      "subtitle": "Run the full pipeline once",
+      "description": "Runs paper_agent run with config merged from YAML and extension preferences (preferences override).",
+      "mode": "no-view"
     }
   ],
   "dependencies": {
     "@raycast/api": "^1.104.9",
-    "@raycast/utils": "^1.17.0"
+    "@raycast/utils": "^1.17.0",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.0.4",
