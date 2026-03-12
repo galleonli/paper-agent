@@ -28,6 +28,8 @@ type ExtensionPreferences = {
   "denyCategories": string,
   /** Exclude keywords - Comma-separated keywords; papers matching these are excluded (maps to direction.exclude_keywords). */
   "excludeKeywords": string,
+  /** Discovery policy - How to rank/select arXiv papers: Deterministic (phrase match) or LinUCB (bandit + exploration). */
+  "policyType": "deterministic" | "linucb",
   /** Enable LLM research summary - When on, the three options below are used to generate research summaries. When off, they are ignored. */
   "summarizeEnabled": boolean,
   /** Summary provider - Only used when "Enable LLM research summary" is on. LLM provider (e.g. openai). */

@@ -96,6 +96,17 @@
       "default": ""
     },
     {
+      "name": "policyType",
+      "type": "dropdown",
+      "title": "Discovery policy",
+      "description": "How to rank/select arXiv papers: Deterministic (phrase match) or LinUCB (bandit + exploration).",
+      "data": [
+        { "title": "Deterministic", "value": "deterministic" },
+        { "title": "LinUCB", "value": "linucb" }
+      ],
+      "default": "deterministic"
+    },
+    {
       "name": "summarizeEnabled",
       "type": "checkbox",
       "title": "Enable LLM research summary",
@@ -124,10 +135,22 @@
       "title": "Summary language",
       "description": "Only used when \"Enable LLM research summary\" is on. Maps to summarize.language.",
       "data": [
-        { "title": "English", "value": "en" },
-        { "title": "Chinese", "value": "zh" },
-        { "title": "Japanese", "value": "ja" },
-        { "title": "German", "value": "de" }
+        {
+          "title": "English",
+          "value": "en"
+        },
+        {
+          "title": "Chinese",
+          "value": "zh"
+        },
+        {
+          "title": "Japanese",
+          "value": "ja"
+        },
+        {
+          "title": "German",
+          "value": "de"
+        }
       ],
       "default": "en"
     },
@@ -224,6 +247,7 @@
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.0.4",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "22.13.10",
     "@types/react": "19.0.10",
     "eslint": "^9.22.0",

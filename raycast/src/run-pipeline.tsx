@@ -79,7 +79,7 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   }
   const sources = merged.sources as Record<string, unknown>;
 
-  // arXiv: default on
+  // arXiv: always on (preference overrides config)
   if (!sources.arxiv || typeof sources.arxiv !== "object") {
     sources.arxiv = {};
   }
@@ -92,8 +92,6 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   const scholar = sources.scholar_alerts as Record<string, unknown>;
   scholar.enabled = prefs.scholarEnabled;
   scholar.mode = "email";
-  scholar.ordering = "arrival";
-  scholar.max_items_per_run = 200;
   if (!scholar.light_filter || typeof scholar.light_filter !== "object") {
     scholar.light_filter = { include_keywords: [], exclude_keywords: [] };
   }
@@ -111,6 +109,14 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   email.from_addresses = fromAddrs ? parseList(fromAddrs) : [];
   email.mbox_path = "";
   email.eml_dir = "";
+
+  // Policy: set from preference (LinUCB or Deterministic)
+  if (prefs.policyType === "linucb" || prefs.policyType === "deterministic") {
+    if (!merged.policy || typeof merged.policy !== "object") {
+      merged.policy = {};
+    }
+    (merged.policy as Record<string, unknown>).type = prefs.policyType;
+  }
 
   return merged;
 }
@@ -156,7 +162,16 @@ export default async function Command() {
   let base: Record<string, unknown>;
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
-    base = (yaml.load(raw) as Record<string, unknown>) ?? {};
+    const loaded = yaml.load(raw);
+    if (loaded == null || typeof loaded !== "object" || Array.isArray(loaded)) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Invalid config",
+        message: "Config must be a YAML object, not a string or array.",
+      });
+      return;
+    }
+    base = loaded as Record<string, unknown>;
   } catch (e) {
     await showToast({
       style: Toast.Style.Failure,
