@@ -18,9 +18,6 @@ from paper_agent.output.local import write_daily_digest, write_local_note
 from paper_agent.export import write_bibtex, write_ris
 from paper_agent.sources import fetch_arxiv
 from paper_agent.sources import scholar_alerts_source
-from paper_agent.policy.base import PolicyContext
-from paper_agent.policy.deterministic import DeterministicPolicy
-from paper_agent.policy.linucb import LinUCBPolicy
 from paper_agent.selection import select_topk
 from paper_agent.core.topic_stats import (
     load_topic_stats,
@@ -74,6 +71,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
 
     # Lookback filter: keep only papers updated within last lookback_days (system local)
     papers_raw = [p for p in papers_raw if within_lookback(p.updated, direction.lookback_days)]
+    after_lookback = len(papers_raw)
     after_category = count_after_category(
         papers_raw, direction.allow_categories, direction.deny_categories
     )
@@ -86,57 +84,64 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     include_match_count = 0
     exclude_match_count = 0
     for p in papers_raw:
-        combined = normalize_text(p.title) + " " + normalize_text(p.summary)
-        combined_with_authors = combined + " " + " ".join(normalize_text(a) for a in p.authors)
-        if include_keywords and text_matches_any(combined, include_keywords):
+        combined_with_authors = (
+            normalize_text(p.title) + " " + normalize_text(p.summary)
+            + " " + " ".join(normalize_text(a) for a in p.authors)
+        )
+        # Match filter logic: include = title OR abstract (not combined), so debug count is accurate.
+        if include_keywords and (
+            text_matches_any(normalize_text(p.title), include_keywords)
+            or text_matches_any(normalize_text(p.summary), include_keywords)
+        ):
             include_match_count += 1
         if exclude_keywords and text_matches_any(combined_with_authors, exclude_keywords):
             exclude_match_count += 1
     if fetched_total > 0 and after_filters == 0:
+        sample_titles = [p.title[:80] + ("..." if len(p.title) > 80 else "") for p in papers_raw[:3]]
         log.warning(
-            "filter_debug include_keywords=%s include_match_count=%d exclude_keywords=%s exclude_match_count=%d lookback_days=%d",
+            "filter_debug after_lookback=%d include_keywords=%s include_match_count=%d "
+            "exclude_keywords=%s exclude_match_count=%d lookback_days=%d sample_titles=%s",
+            after_lookback,
             include_keywords,
             include_match_count,
             exclude_keywords,
             exclude_match_count,
             direction.lookback_days,
+            sample_titles,
         )
 
-    # Policy + constrained selection (agent logic) for discovery feed only.
-    # max_papers_per_day applies ONLY here; Scholar Inbox never passes through selector/policy.
-    papers_for_policy = [r.paper for r in ranked_all]
-    context = PolicyContext(config)
-
-    # Optional AutoTune: choose policy parameters before scoring.
-    autotune_configured = bool(getattr(config, "autotune", None) and config.autotune.enabled)
-    autotune_enabled = autotune_configured and config.policy.type == "linucb"
+    # Selection: build ScoredPaper from filter rank (policy off = required-keyword match only).
+    # Score by tier: title match > abstract match > seed > other; then select_topk.
+    scored: list[ScoredPaper] = []
+    for r in ranked_all:
+        topic_id = r.paper.categories[0] if r.paper.categories else "default"
+        why_lower = (r.why_this_paper or "").lower()
+        if "title" in why_lower and "keyphrase" in why_lower:
+            score = 1.5
+        elif "abstract" in why_lower and "keyphrase" in why_lower:
+            score = 1.2
+        elif "seed" in why_lower:
+            score = 1.1
+        else:
+            score = 1.0
+        scored.append(
+            ScoredPaper(
+                paper=r.paper,
+                score=score,
+                uncertainty=0.0,
+                novelty=0.0,
+                why_this_paper=r.why_this_paper or "—",
+                topic_id=topic_id,
+            )
+        )
+    autotune_enabled = False
+    autotune_controller = None
+    autotune_params = None
     autotune_candidate_name = "static"
     autotune_method = "off"
-    autotune_params: TunedPolicyParams | None = None
     autotune_daily_reward = 0.0
-
     run_date = get_run_date()
 
-    autotune_controller: AutoTuneController | None = None
-    if autotune_enabled:
-        autotune_method = config.autotune.method
-        autotune_controller = AutoTuneController(config, delivery.state_dir)
-        at_context = AutoTuneContext(
-            run_date=run_date,
-        )
-        autotune_params = autotune_controller.choose_config(at_context)
-        autotune_candidate_name = autotune_params.candidate_id
-        # Override policy config for this run only.
-        config.policy.alpha = autotune_params.alpha
-        config.policy.lambda_ucb = autotune_params.lambda_ucb
-        config.policy.mu_novelty = autotune_params.mu_novelty
-        config.policy.ridge = autotune_params.ridge
-
-    if config.policy.type == "linucb":
-        policy = LinUCBPolicy()
-    else:
-        policy = DeterministicPolicy()
-    scored = policy.score(papers_for_policy, context)
     selected_scored = select_topk(
         scored,
         k=direction.max_papers_per_day,
