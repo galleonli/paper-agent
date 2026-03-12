@@ -1,40 +1,21 @@
 import { ActionPanel, List, Action, getPreferenceValues } from "@raycast/api";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { useMemo, useState } from "react";
+import { resolveDeliveryDirs, withEffectiveConfigPath } from "./config-utils";
+import { type Paper, parseCliPapers, renderPaperDetailMarkdown } from "./paper-utils";
 
 const prefs = getPreferenceValues<Preferences.SearchPapers>();
 const CONFIG_PATH = prefs.configPath?.trim() ?? "";
 const HAS_CONFIG = CONFIG_PATH.length > 0;
-const PAPER_DIR = prefs.paperDir?.trim() ?? "";
+const PREF_PAPER_DIR = prefs.paperDir?.trim() ?? "";
+const { paperDir: PAPER_DIR, libraryDir: LIBRARY_DIR } = resolveDeliveryDirs(CONFIG_PATH, PREF_PAPER_DIR);
 const HAS_PAPER_DIR = PAPER_DIR.length > 0;
-const LIBRARY_DIR = path.join(PAPER_DIR, "library");
 const AGENT_ROOT = HAS_CONFIG ? path.dirname(CONFIG_PATH) : "";
 const PYTHON_BIN =
   prefs.pythonPath && prefs.pythonPath.trim().length > 0
     ? prefs.pythonPath
     : path.join(AGENT_ROOT, ".venv", "bin", "python3");
-
-type ResearchSummary = {
-  heading?: string;
-  body?: string;
-};
-
-type Paper = {
-  id: string;
-  date: string;
-  title: string;
-  authors?: string[];
-  abstract?: string;
-  whyThisPaper?: string;
-  categories?: string[];
-  researchSummary?: ResearchSummary;
-  link?: string;
-  notePath: string;
-  hasNote: boolean;
-  published?: string;
-};
 
 function loadSearchResults(query: string): Paper[] {
   if (!HAS_CONFIG || !HAS_PAPER_DIR) {
@@ -42,55 +23,22 @@ function loadSearchResults(query: string): Paper[] {
   }
   let rawJson = "";
   try {
-    rawJson = execFileSync(
-      PYTHON_BIN,
-      ["-m", "paper_agent", "search", "--query", query, "--json", "--config", CONFIG_PATH],
-      { cwd: AGENT_ROOT, encoding: "utf-8" }
+    rawJson = withEffectiveConfigPath(CONFIG_PATH, PREF_PAPER_DIR, (effectiveConfigPath) =>
+      execFileSync(
+        PYTHON_BIN,
+        ["-m", "paper_agent", "search", "--query", query, "--json", "--config", effectiveConfigPath],
+        { cwd: AGENT_ROOT, encoding: "utf-8" }
+      )
     );
   } catch {
     return [];
   }
 
-  let data: unknown;
-  try {
-    data = JSON.parse(rawJson);
-  } catch {
-    return [];
-  }
-
-  if (!Array.isArray(data)) {
-    return [];
-  }
-
-  return data
-    .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
-    .map((e) => {
-      const id = (e.id as string) ?? "";
-      const date = (e.date as string) ?? "";
-      const published = e.published as string | undefined;
-      const rawNotePath = e.note_path as string | undefined;
-      const notePath = rawNotePath
-        ? path.join(PAPER_DIR, rawNotePath)
-        : path.join(LIBRARY_DIR, date || "unknown", `${id || "note"}.md`);
-      const rs = e.research_summary as Record<string, unknown> | undefined;
-
-      return {
-        id: id || path.basename(notePath, ".md"),
-        date,
-        title: (e.title as string) ?? "Untitled",
-        published,
-        authors: e.authors as string[] | undefined,
-        abstract: e.abstract as string | undefined,
-        whyThisPaper: e.why_this_paper as string | undefined,
-        categories: e.categories as string[] | undefined,
-        researchSummary: rs
-          ? { heading: rs.heading as string, body: rs.body as string }
-          : undefined,
-        link: e.link as string | undefined,
-        notePath,
-        hasNote: fs.existsSync(notePath),
-      } satisfies Paper;
-    });
+  return parseCliPapers(rawJson, {
+    paperDir: PAPER_DIR,
+    libraryDir: LIBRARY_DIR,
+    fallbackDate: "unknown",
+  });
 }
 
 export default function Command() {
@@ -107,7 +55,13 @@ export default function Command() {
       {(!HAS_CONFIG || !HAS_PAPER_DIR) && (
         <List.EmptyView
           title="Set preferences first"
-          description="Open extension preferences and set both 'Config file path' and 'Paper directory' (delivery.paper_dir)."
+          description="Set 'Config file path' in preferences. 'Paper directory' can be set in preferences or config.yaml (delivery.paper_dir)."
+        />
+      )}
+      {HAS_CONFIG && HAS_PAPER_DIR && papers.length === 0 && (
+        <List.EmptyView
+          title="No papers or CLI failed"
+          description="Check: Config path = full path to config.yaml; Paper directory = paper repo root; .venv/bin/python3 has paper_agent; run the pipeline at least once."
         />
       )}
       {HAS_CONFIG && HAS_PAPER_DIR &&
@@ -120,28 +74,7 @@ export default function Command() {
             .join(" · ")}
           detail={
             <List.Item.Detail
-              markdown={`# ${paper.title}
-
-${paper.authors?.length ? `**Authors:** ${paper.authors.join(", ")}\n\n` : ""}${paper.categories?.length ? `**Categories:** ${paper.categories.join(", ")}\n\n` : ""}**Date:** ${paper.date}
-
----
-
-**Why this paper**
-
-${paper.whyThisPaper ?? "N/A"}
-
----
-
-${paper.abstract ?? "No abstract available."}
-${paper.researchSummary?.body ? `
-
----
-
-## ${paper.researchSummary.heading ?? "Research summary"}
-
-${paper.researchSummary.body}` : ""}
-${paper.link ? `\n---\n[Open Paper](${paper.link})` : ""}
-`}
+              markdown={renderPaperDetailMarkdown(paper, paper.date)}
             />
           }
           actions={

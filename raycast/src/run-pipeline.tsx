@@ -4,10 +4,11 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import * as os from "node:os";
 import yaml from "js-yaml";
+import { applyPaperDirOverride, getPaperDirFromConfigObject } from "./config-utils";
 
 const prefs = getPreferenceValues<Preferences.RunPipeline>();
 const CONFIG_PATH = prefs.configPath?.trim() ?? "";
-const PAPER_DIR = prefs.paperDir?.trim() ?? "";
+const PREF_PAPER_DIR = prefs.paperDir?.trim() ?? "";
 const AGENT_ROOT = CONFIG_PATH.length > 0 ? path.dirname(CONFIG_PATH) : "";
 const PYTHON_BIN =
   prefs.pythonPath && prefs.pythonPath.trim().length > 0
@@ -28,7 +29,7 @@ function parseList(value: string | undefined): string[] {
  * Package.json defaults for maxPapersPerDay, lookbackDays, allowCategories are non-empty, so those always override.
  */
 function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
-  const merged = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
+  const merged = applyPaperDirOverride(base, PREF_PAPER_DIR);
 
   if (!merged.direction || typeof merged.direction !== "object") {
     merged.direction = {};
@@ -55,14 +56,6 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   }
   if (prefs.excludeKeywords?.trim()) {
     direction.exclude_keywords = parseList(prefs.excludeKeywords);
-  }
-
-  if (!merged.delivery || typeof merged.delivery !== "object") {
-    merged.delivery = {};
-  }
-  const delivery = merged.delivery as Record<string, unknown>;
-  if (PAPER_DIR) {
-    delivery.paper_dir = PAPER_DIR;
   }
 
   if (!merged.summarize || typeof merged.summarize !== "object") {
@@ -141,11 +134,11 @@ function runPipeline(configPath: string): Promise<{ success: boolean; stderr?: s
 }
 
 export default async function Command() {
-  if (!CONFIG_PATH || !PAPER_DIR) {
+  if (!CONFIG_PATH) {
     await showToast({
       style: Toast.Style.Failure,
-      title: "Preferences required",
-      message: "Set Config file path and Paper directory in extension Preferences.",
+      title: "Config path required",
+      message: "Set Config file path in extension Preferences.",
     });
     return;
   }
@@ -177,6 +170,16 @@ export default async function Command() {
       style: Toast.Style.Failure,
       title: "Invalid config YAML",
       message: e instanceof Error ? e.message : String(e),
+    });
+    return;
+  }
+
+  const effectivePaperDir = PREF_PAPER_DIR || getPaperDirFromConfigObject(base);
+  if (!effectivePaperDir) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Paper directory not set",
+      message: "Set 'Paper directory' in Preferences or config.yaml delivery.paper_dir.",
     });
     return;
   }
