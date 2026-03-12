@@ -12,7 +12,8 @@
 # **********  USER SETTINGS (EDIT HERE)  **********
 #
 # -----------------------------------------------------------------------------
-# Interest model: seeds only (keyphrases/negative use direction.include_keywords / exclude_keywords when set via Raycast or config)
+# Interest: seeds only. Required keywords = direction.include_keywords (OR match; title or abstract).
+# Exclude = direction.exclude_keywords. Set via Raycast Preferences or here for CLI.
 # -----------------------------------------------------------------------------
 interests:
   seeds: []
@@ -35,7 +36,7 @@ export:
   formats: [] # ["bibtex", "ris"]
 
 # -----------------------------------------------------------------------------
-# Feedback (blocked/boosted; used by deterministic policy)
+# Feedback (blocked/boosted; unused when policy is off)
 # -----------------------------------------------------------------------------
 feedback:
   blocked_phrases: []
@@ -53,13 +54,8 @@ selection:
 # -----------------------------------------------------------------------------
 # Policy
 # -----------------------------------------------------------------------------
-# policy.type (Deterministic / LinUCB) is set in Raycast extension Preferences.
-# Optional LinUCB tuning (uncomment to override defaults):
-# policy:
-#   alpha: 0.5              # LinUCB uncertainty scale
-#   lambda_ucb: 1.0         # weight for uncertainty in selection score
-#   mu_novelty: 0.3         # weight for novelty in selection score
-#   ridge: 1.0              # ridge regularization for LinUCB
+# policy.type is set in Raycast extension Preferences. Only "off" is supported:
+# off = select by required-keyword match only (title first, then abstract).
 
 # -----------------------------------------------------------------------------
 # AutoTune (optional meta-controller for policy hyperparameters)
@@ -112,6 +108,7 @@ advanced:
 # -----------------------------------------------------------------------------
 # Optional prompt overrides (advanced; omit to use built-in defaults)
 # Put long templates at the end to keep the main settings readable.
+
 # -----------------------------------------------------------------------------
 prompts:
   research_summary_template: |

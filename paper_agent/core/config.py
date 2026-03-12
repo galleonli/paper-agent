@@ -279,18 +279,18 @@ class SelectionConfig(BaseModel):
 
 
 class PolicyConfig(BaseModel):
-    """Policy: deterministic or LinUCB; UCB/novelty weights for bandit."""
+    """Policy: off = required-keyword match only; no scoring policy."""
 
-    type: str = Field(default="deterministic", description="Policy: 'deterministic' or 'linucb'")
-    alpha: float = Field(default=0.5, ge=0.0, le=5.0, description="LinUCB uncertainty scale")
-    lambda_ucb: float = Field(default=1.0, ge=0.0, le=5.0, description="Weight for uncertainty in selection score")
-    mu_novelty: float = Field(default=0.3, ge=0.0, le=5.0, description="Weight for novelty in selection score")
-    ridge: float = Field(default=1.0, ge=0.01, le=100.0, description="Ridge regularization for LinUCB")
+    type: str = Field(default="off", description="Policy: 'off' (recommended), or legacy 'deterministic'/'linucb' (ignored by pipeline)")
+    alpha: float = Field(default=0.5, ge=0.0, le=5.0, description="LinUCB uncertainty scale (unused when type=off)")
+    lambda_ucb: float = Field(default=1.0, ge=0.0, le=5.0, description="Weight for uncertainty (unused when type=off)")
+    mu_novelty: float = Field(default=0.3, ge=0.0, le=5.0, description="Weight for novelty (unused when type=off)")
+    ridge: float = Field(default=1.0, ge=0.01, le=100.0, description="Ridge regularization (unused when type=off)")
 
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
-        allowed = {"deterministic", "linucb"}
+        allowed = {"off", "deterministic", "linucb"}
         if v.lower() not in allowed:
             raise ValueError(f"policy.type must be one of {allowed}")
         return v.lower()
