@@ -21,6 +21,14 @@ interests:
   # - "arXiv:2302.00001"
 
 # -----------------------------------------------------------------------------
+# Delivery paths (state_dir and logs_dir read from here; paper_dir/library_dir
+# come from Raycast Preferences when using Run Paper Agent)
+# -----------------------------------------------------------------------------
+delivery:
+  state_dir: "./state"
+  logs_dir: "./logs"
+
+# -----------------------------------------------------------------------------
 # Export: BibTeX and RIS (EndNote-compatible)
 # -----------------------------------------------------------------------------
 export:
