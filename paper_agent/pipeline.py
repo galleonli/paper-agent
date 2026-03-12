@@ -30,6 +30,7 @@ from paper_agent.features.encoder import encode_paper
 from paper_agent.autotune import AutoTuneController, TunedPolicyParams
 from paper_agent.autotune.base import AutoTuneContext
 from paper_agent.autotune.reward import compute_reward
+from paper_agent.core.utils import normalize_text, text_matches_any
 import json
 from typing import Any, Dict, List
 
@@ -80,6 +81,26 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     # Filter and rank (direction + interest)
     ranked_all = filter_and_rank(papers_raw, config)
     after_filters = len(ranked_all)
+    include_keywords = [k.strip() for k in direction.include_keywords if (k or "").strip()]
+    exclude_keywords = [k.strip() for k in direction.exclude_keywords if (k or "").strip()]
+    include_match_count = 0
+    exclude_match_count = 0
+    for p in papers_raw:
+        combined = normalize_text(p.title) + " " + normalize_text(p.summary)
+        combined_with_authors = combined + " " + " ".join(normalize_text(a) for a in p.authors)
+        if include_keywords and text_matches_any(combined, include_keywords):
+            include_match_count += 1
+        if exclude_keywords and text_matches_any(combined_with_authors, exclude_keywords):
+            exclude_match_count += 1
+    if fetched_total > 0 and after_filters == 0:
+        log.warning(
+            "filter_debug include_keywords=%s include_match_count=%d exclude_keywords=%s exclude_match_count=%d lookback_days=%d",
+            include_keywords,
+            include_match_count,
+            exclude_keywords,
+            exclude_match_count,
+            direction.lookback_days,
+        )
 
     # Policy + constrained selection (agent logic) for discovery feed only.
     # max_papers_per_day applies ONLY here; Scholar Inbox never passes through selector/policy.
