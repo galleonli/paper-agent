@@ -7,7 +7,7 @@
 *Discover relevant arXiv papers with explainable, interest-aware selection (instead of raw keyword matching).
 Keep Google Scholar Alert emails in a separate inbox, then write local notes, daily digests, and BibTeX/RIS exports.*
 
-[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Google Scholar setup**](#google-scholar-setup) · [**Configuration**](#configuration-user-settings-first) · [**Output artifacts**](#output-artifacts)
+[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Configuration**](#configuration-user-settings-first) · [**Google Scholar setup**](#google-scholar-setup) · [**Raycast extension**](#raycast-extension) · [**Troubleshooting**](#troubleshooting)
 
 <br/>
 
@@ -16,7 +16,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 [![arXiv](https://img.shields.io/badge/arXiv-API-orange.svg)](https://arxiv.org/help/api)
 [![YAML](https://img.shields.io/badge/config-YAML-red.svg)](config.example.yaml)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-✓-green.svg)](#key-features)
-[![BibTeX / RIS](https://img.shields.io/badge/export-BibTeX%20%7C%20RIS-00599C.svg)](#output-artifacts)
+[![Raycast](https://img.shields.io/badge/Raycast-extension-6366f1.svg)](#raycast-extension)
 
 </div>
 
@@ -199,6 +199,50 @@ Papers: 3
 ## Scheduling
 
 Daily automation is covered in [Quick start → Run daily (automatic)](#run-daily-automatic). Use cron (or launchd / systemd timer) with `CRON_TZ` set to your timezone.
+
+---
+
+## Raycast extension
+
+A [Raycast](https://www.raycast.com/) extension provides a minimal interface for browsing today's local papers and opening local Markdown notes from a Paper Agent workflow.
+
+**Status:** Early MVP. The API and behavior may change between versions.
+
+### Requirements
+
+- Raycast
+- A local Paper Agent library (JSON outputs under a date-based folder structure)
+
+### Getting started
+
+- Clone this repository.
+- In the `raycast/` directory, run `npm install`.
+- In Raycast, enable the Developer Tools (if not already enabled).
+- Run `npm run dev` from `raycast/` to load the extension in Raycast during development.
+
+### Configuration
+
+By default, the extension expects your Paper Agent project at:
+
+- Paper directory and config path (set in Raycast Preferences; no hardcoded path)
+- Library layout: `<paper_dir>/library/<YYYY-MM-DD>/*.json`
+
+If your Paper Agent project lives elsewhere, set **Config file path** and **Paper directory** in the extension Preferences (Raycast → Extensions → Paper Agent → Preferences).
+
+For **Recent Papers**, the limit is set in extension Preferences (Recent papers limit).
+
+### Commands
+
+| Command | Description |
+|--------|-------------|
+| **Today Papers** | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), Open local note (when a matching `.md` exists). Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`. |
+| **Recent Papers** | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. |
+| **Search Papers** | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). |
+
+### Development (Raycast)
+
+- **Build:** `npm run build` (from `raycast/`)
+- **Lint:** `npm run lint`
 
 ---
 
