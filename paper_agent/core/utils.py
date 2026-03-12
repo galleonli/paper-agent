@@ -2,6 +2,8 @@
 Shared helpers: safe filenames, text normalization, phrase matching.
 """
 
+import re
+
 
 def normalize_text(s: str) -> str:
     """Lowercase and strip; used for case-insensitive matching."""
@@ -9,12 +11,32 @@ def normalize_text(s: str) -> str:
 
 
 def text_matches_any(text: str, phrases: list[str]) -> bool:
-    """True if any non-empty phrase appears in text (case-insensitive)."""
+    """
+    True if any non-empty phrase matches text (case-insensitive).
+
+    Matching rule:
+    - Multi-word phrases use substring match.
+    - Single-word alnum phrases use word boundaries to avoid false positives
+      (e.g. "pose" should not match "propose").
+    """
     if not phrases:
         return False
     norm_text = normalize_text(text)
     for p in phrases:
-        if p and normalize_text(p) in norm_text:
+        if not p:
+            continue
+        phrase = normalize_text(p)
+        if not phrase:
+            continue
+        if re.search(r"\s", phrase):
+            if phrase in norm_text:
+                return True
+            continue
+        if phrase.isalnum():
+            if re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", norm_text):
+                return True
+            continue
+        if phrase in norm_text:
             return True
     return False
 
