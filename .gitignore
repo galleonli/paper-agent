@@ -4,6 +4,9 @@
 # Local config (copy from config.example.yaml; may contain secrets)
 config.yaml
 
+# Root-level TODO (personal/local task list; do not commit)
+TODO.md
+
 # Google Takeout exports (personal data: mail, blocked addresses, etc.; never commit)
 Takeout/
 
