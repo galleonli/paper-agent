@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import * as os from "node:os";
 import { useEffect } from "react";
 import yaml from "js-yaml";
-import { applyPaperDirOverride, getPaperDirFromConfigObject } from "./config-utils";
+import { applyPaperDirOverride } from "./config-utils";
 
 const prefs = getPreferenceValues<Preferences.RunPipeline>();
 const CONFIG_PATH = prefs.configPath?.trim() ?? "";
@@ -19,9 +19,22 @@ const PYTHON_BIN =
 function parseList(value: string | undefined): string[] {
   if (!value || !value.trim()) return [];
   return value
-    .split(",")
+    // Support comma/newline/semicolon (including Chinese punctuation) separators.
+    .split(/[\n,，;；]+/g)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function parseRequiredPositiveInt(value: string | undefined, fieldName: string): { ok: true; value: number } | { ok: false; message: string } {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return { ok: false, message: `${fieldName} is required in extension Preferences.` };
+  }
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 1) {
+    return { ok: false, message: `${fieldName} must be a positive integer.` };
+  }
+  return { ok: true, value: n };
 }
 
 /**
@@ -36,36 +49,20 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
     merged.direction = {};
   }
   const direction = merged.direction as Record<string, unknown>;
-  const maxPapers = prefs.maxPapersPerDay?.trim();
-  if (maxPapers) {
-    const n = parseInt(maxPapers, 10);
-    if (!Number.isNaN(n)) direction.max_papers_per_day = n;
-  }
-  const lookback = prefs.lookbackDays?.trim();
-  if (lookback) {
-    const n = parseInt(lookback, 10);
-    if (!Number.isNaN(n)) direction.lookback_days = n;
-  }
-  if (prefs.keyphrases?.trim()) {
-    direction.include_keywords = parseList(prefs.keyphrases);
-  }
-  if (prefs.allowCategories?.trim()) {
-    direction.allow_categories = parseList(prefs.allowCategories);
-  }
-  if (prefs.denyCategories?.trim()) {
-    direction.deny_categories = parseList(prefs.denyCategories);
-  }
-  if (prefs.excludeKeywords?.trim()) {
-    direction.exclude_keywords = parseList(prefs.excludeKeywords);
-  }
+  direction.max_papers_per_day = parseInt(prefs.maxPapersPerDay?.trim() ?? "", 10);
+  direction.lookback_days = parseInt(prefs.lookbackDays?.trim() ?? "", 10);
+  direction.include_keywords = parseList(prefs.keyphrases);
+  direction.allow_categories = parseList(prefs.allowCategories);
+  direction.deny_categories = parseList(prefs.denyCategories);
+  direction.exclude_keywords = parseList(prefs.excludeKeywords);
 
   if (!merged.summarize || typeof merged.summarize !== "object") {
     merged.summarize = {};
   }
   const summarize = merged.summarize as Record<string, unknown>;
   summarize.enabled = prefs.summarizeEnabled;
-  summarize.provider = prefs.summarizeProvider?.trim() || "openai";
-  summarize.model = prefs.summarizeModel?.trim() || "gpt-4o-mini";
+  summarize.provider = prefs.summarizeEnabled ? (prefs.summarizeProvider?.trim() ?? "") : "openai";
+  summarize.model = prefs.summarizeEnabled ? (prefs.summarizeModel?.trim() ?? "") : "gpt-4o-mini";
   summarize.language = prefs.summarizeLanguage;
 
   if (!merged.sources || typeof merged.sources !== "object") {
@@ -93,12 +90,12 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
     scholar.email = {};
   }
   const email = scholar.email as Record<string, unknown>;
-  const provider = prefs.scholarProvider?.trim();
+  const provider = (prefs.scholarProvider?.trim() ?? "").toLowerCase();
   email.provider = provider || "imap";
   email.imap_host = prefs.scholarImapHost?.trim() ?? "";
   email.imap_user = prefs.scholarImapUser?.trim() ?? "";
-  email.imap_password_env = prefs.scholarImapPasswordEnv?.trim() || "IMAP_PASSWORD";
-  email.gmail_label = prefs.scholarGmailLabel?.trim() || "scholar-alerts";
+  email.imap_password_env = prefs.scholarImapPasswordEnv?.trim() ?? "";
+  email.gmail_label = prefs.scholarGmailLabel?.trim() ?? "";
   const fromAddrs = prefs.scholarFromAddresses?.trim();
   email.from_addresses = fromAddrs ? parseList(fromAddrs) : [];
   email.mbox_path = "";
@@ -115,18 +112,32 @@ function mergeConfig(base: Record<string, unknown>): Record<string, unknown> {
   return merged;
 }
 
-function runPipeline(configPath: string): Promise<{ success: boolean; stderr?: string }> {
+/** Matches "Processed N new paper(s)." from paper_agent CLI stdout. */
+function parseProcessedCount(stdout: string): number | undefined {
+  const m = stdout.match(/Processed\s+(\d+)\s+new\s+paper/i);
+  return m ? parseInt(m[1], 10) : undefined;
+}
+
+function runPipeline(configPath: string): Promise<{ success: boolean; stderr?: string; stdout?: string }> {
   return new Promise((resolve) => {
     let stderr = "";
+    let stdout = "";
     const proc = spawn(PYTHON_BIN, ["-m", "paper_agent", "run", "--config", configPath], {
       cwd: AGENT_ROOT,
       env: process.env,
+    });
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
     });
     proc.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
     proc.on("close", (code) => {
-      resolve({ success: code === 0, stderr: stderr.trim() || undefined });
+      resolve({
+        success: code === 0,
+        stderr: stderr.trim() || undefined,
+        stdout: stdout.trim() || undefined,
+      });
     });
     proc.on("error", () => {
       resolve({ success: false, stderr: "Failed to start process" });
@@ -156,13 +167,53 @@ function prepareRun(): PrepareResult {
   } catch (e) {
     return { ok: false, title: "Invalid config YAML", message: e instanceof Error ? e.message : String(e) };
   }
-  const effectivePaperDir = PREF_PAPER_DIR || getPaperDirFromConfigObject(base);
-  if (!effectivePaperDir) {
+  if (!PREF_PAPER_DIR) {
     return {
       ok: false,
-      title: "Paper directory not set",
-      message: "Set 'Paper directory' in Preferences or config.yaml delivery.paper_dir.",
+      title: "Paper directory required",
+      message: "Set 'Paper directory' in extension Preferences for Run Paper Agent.",
     };
+  }
+  const maxPapersParsed = parseRequiredPositiveInt(prefs.maxPapersPerDay, "Max papers per day");
+  if (!maxPapersParsed.ok) {
+    return { ok: false, title: "Invalid preference", message: maxPapersParsed.message };
+  }
+  const lookbackParsed = parseRequiredPositiveInt(prefs.lookbackDays, "Lookback days");
+  if (!lookbackParsed.ok) {
+    return { ok: false, title: "Invalid preference", message: lookbackParsed.message };
+  }
+  if (prefs.summarizeEnabled) {
+    if (!(prefs.summarizeProvider?.trim() ?? "")) {
+      return { ok: false, title: "Invalid preference", message: "Summary provider is required when LLM summary is enabled." };
+    }
+    if (!(prefs.summarizeModel?.trim() ?? "")) {
+      return { ok: false, title: "Invalid preference", message: "Summary model is required when LLM summary is enabled." };
+    }
+  }
+  if (prefs.scholarEnabled) {
+    const provider = (prefs.scholarProvider?.trim() ?? "").toLowerCase();
+    if (!provider) {
+      return { ok: false, title: "Invalid preference", message: "Scholar email provider is required when Scholar Inbox is enabled." };
+    }
+    if (!["imap", "gmail", "mbox", "eml_dir"].includes(provider)) {
+      return { ok: false, title: "Invalid preference", message: "Scholar email provider must be one of: imap, gmail, mbox, eml_dir." };
+    }
+    if (provider === "mbox" || provider === "eml_dir") {
+      return {
+        ok: false,
+        title: "Unsupported in Preferences",
+        message: `Scholar provider '${provider}' requires local paths not exposed in Raycast Preferences. Use imap/gmail or CLI config.`,
+      };
+    }
+    if (!(prefs.scholarImapHost?.trim() ?? "")) {
+      return { ok: false, title: "Invalid preference", message: "Scholar IMAP host is required when Scholar Inbox is enabled." };
+    }
+    if (!(prefs.scholarImapUser?.trim() ?? "")) {
+      return { ok: false, title: "Invalid preference", message: "Scholar IMAP user is required when Scholar Inbox is enabled." };
+    }
+    if (!(prefs.scholarImapPasswordEnv?.trim() ?? "")) {
+      return { ok: false, title: "Invalid preference", message: "Scholar IMAP password env var is required when Scholar Inbox is enabled." };
+    }
   }
   const merged = mergeConfig(base);
   const tempConfigPath = path.join(
@@ -195,11 +246,13 @@ function RunPipelineView() {
           return;
         }
         tempConfigPath = prepared.tempConfigPath;
-        const { success, stderr } = await runPipeline(tempConfigPath);
+        const { success, stderr, stdout } = await runPipeline(tempConfigPath);
         if (cancelled) return;
         if (!cancelled) {
           if (success) {
-            await showToast({ style: Toast.Style.Success, title: "Paper Agent finished" });
+            const count = parseProcessedCount(stdout ?? "");
+            const message = count !== undefined ? `${count} new paper(s)` : undefined;
+            await showToast({ style: Toast.Style.Success, title: "Paper Agent finished", message });
           } else {
             await showToast({
               style: Toast.Style.Failure,
