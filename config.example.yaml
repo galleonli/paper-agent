@@ -1,82 +1,30 @@
 # =============================================================================
 # PAPER INTELLIGENCE AGENT — CONFIGURATION
 # Copy to config.yaml and edit. This file is the single source of truth for
-# user-customizable behavior.
+# user-customizable behavior (except when using Raycast Run Paper Agent).
 # All dates (paths, digest, run date, lookback) use system local time only.
 # =============================================================================
+#
+# When using Run Paper Agent from Raycast: direction, delivery, summarize, and
+# sources are set in extension Preferences; they are not read from this file.
+# For CLI/cron runs, add those sections to config.yaml or the app uses defaults.
 #
 # **********  USER SETTINGS (EDIT HERE)  **********
 #
 # -----------------------------------------------------------------------------
-# Daily limits (catch-up: lookback window + cap per run)
-# -----------------------------------------------------------------------------
-# Scope of `direction`:
-# - lookback_days: global catch-up window for both discovery and Scholar Inbox.
-# - max_papers_per_day: discovery only (Scholar Inbox uses sources.scholar_alerts.max_items_per_run).
-# - allow/deny/queries/include/exclude rules below: discovery feed only.
-direction:
-  max_papers_per_day: 15
-  lookback_days: 3
-  allow_categories: ["cs.LG", "cs.CL"]
-  deny_categories: []
-  queries: []
-  include_keywords: []
-  exclude_keywords: []
-
-# -----------------------------------------------------------------------------
-# Interest model: seeds only (keyphrases/negative use direction.include_keywords / exclude_keywords)
+# Interest model: seeds only (keyphrases/negative use direction.include_keywords / exclude_keywords when set via Raycast or config)
 # -----------------------------------------------------------------------------
 interests:
-  seeds:
-    - "https://arxiv.org/abs/2301.12345"
-    - "arXiv:2302.00001"
-
-delivery:
-  paper_dir: "/path/to/your/paper/repo"
-  state_dir: "./state"
-  logs_dir: "./logs"
-
-# -----------------------------------------------------------------------------
-# Summarization: single switch (LLM research summary). If enabled, set provider/model/language.
-# -----------------------------------------------------------------------------
-summarize:
-  enabled: true
-  provider: "openai"
-  model: "gpt-4o-mini"
-  language: "en"
+  seeds: []
+  # Examples (uncomment and add your seed paper URLs/IDs):
+  # - "https://arxiv.org/abs/2301.12345"
+  # - "arXiv:2302.00001"
 
 # -----------------------------------------------------------------------------
 # Export: BibTeX and RIS (EndNote-compatible)
 # -----------------------------------------------------------------------------
 export:
   formats: [] # ["bibtex", "ris"]
-
-# -----------------------------------------------------------------------------
-# Sources: arXiv (discovery) + Scholar Inbox (email only; no RSS, no crawling)
-# -----------------------------------------------------------------------------
-sources:
-  arxiv:
-    enabled: true
-  # Scholar Inbox: Google Scholar Alerts via email only. Does NOT consume max_papers_per_day;
-  # does NOT use bandit/exploration/diversity constraints. Ordering: arrival (email received) only.
-  scholar_alerts:
-    enabled: false
-    mode: "email"                 # only email is implemented for Scholar Alerts
-    email:
-      provider: "imap"           # mbox | eml_dir | gmail | imap
-      imap_host: "imap.gmail.com"
-      imap_user: "your_scholar_inbox@gmail.com"
-      imap_password_env: "IMAP_PASSWORD"   # env var name for password
-      gmail_label: "scholar-alerts"  # mailbox/label to read from for Gmail IMAP
-      mbox_path: ""               # path to exported .mbox (when provider=mbox)
-      eml_dir: ""                # directory of .eml files (when provider=eml_dir)
-      from_addresses: ["scholaralerts-noreply@google.com"]  # optional filter; can be empty []
-    max_items_per_run: 200
-    ordering: "arrival"          # only arrival for email inbox semantics
-    light_filter:
-      include_keywords: []
-      exclude_keywords: []
-    # NOTE: do NOT add count_toward_daily_limit or participate_in_constraints.
 
 # -----------------------------------------------------------------------------
 # Feedback (blocked/boosted; used by deterministic policy)
@@ -95,18 +43,15 @@ selection:
   min_topics: 1
 
 # -----------------------------------------------------------------------------
-# Policy: deterministic (phrase-based) or linucb (bandit: reward + uncertainty + novelty)
+# Policy
 # -----------------------------------------------------------------------------
-policy:
-  type: "linucb"   # or "deterministic"
-  # The following LinUCB hyperparameters have sensible defaults and usually do
-  # not need to be changed. If you really want to tune them, see
-  # docs/agent-logic.md and docs/autotune-design.md and set them explicitly:
-  #
-  # alpha: 0.5              # LinUCB uncertainty scale
-  # lambda_ucb: 1.0         # weight for uncertainty in selection score
-  # mu_novelty: 0.3         # weight for novelty in selection score
-  # ridge: 1.0              # ridge regularization for LinUCB
+# policy.type (Deterministic / LinUCB) is set in Raycast extension Preferences.
+# Optional LinUCB tuning (uncomment to override defaults):
+# policy:
+#   alpha: 0.5              # LinUCB uncertainty scale
+#   lambda_ucb: 1.0         # weight for uncertainty in selection score
+#   mu_novelty: 0.3         # weight for novelty in selection score
+#   ridge: 1.0              # ridge regularization for LinUCB
 
 # -----------------------------------------------------------------------------
 # AutoTune (optional meta-controller for policy hyperparameters)

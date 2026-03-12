@@ -43,11 +43,7 @@ cp config.example.yaml config.yaml
 python -m paper_agent run --config config.yaml
 ```
 
-Edit `config.yaml` at minimum:
-
-- `interests.keyphrases`
-- `direction.queries`
-- optional `sources.scholar_alerts.*`
+Edit `config.yaml` as needed (e.g. `interests.seeds`, `policy`, `export`). If you use **Run Paper Agent** from Raycast, set direction/delivery/summarize/sources in extension Preferences; for CLI/cron, add those sections to config or use defaults.
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
 
@@ -111,18 +107,16 @@ Recommended:
 
 ## Configuration (user settings first)
 
-Copy `config.example.yaml` to `config.yaml`. Main knobs:
+Copy `config.example.yaml` to `config.yaml`. The example config omits **direction**, **delivery**, **summarize**, and **sources**; when you use **Run Paper Agent** from the Raycast extension, those are taken from extension Preferences only (see [Raycast → Config vs Preferences](#config-vs-preferences-when-using-run-paper-agent)). For CLI or cron runs, add those sections to `config.yaml` if you need non-default behavior; otherwise the app uses built-in defaults.
 
-| What | Where |
-|------|--------|
-| **Interests** | `interests.seeds`, `interests.keyphrases`, `interests.negative_keyphrases` |
-| **Direction (scope)** | `direction.lookback_days` applies to both discovery and Scholar Inbox (arrival window for Scholar); `direction.max_papers_per_day` and `direction.allow_categories` / `direction.deny_categories` / `direction.queries` / `direction.include_keywords` / `direction.exclude_keywords` / `direction.exclude_authors` apply to discovery only |
-| **Summarization** | Single switch: `summarize.enabled` (LLM research summary). When on, set `summarize.provider`, `summarize.model`, `summarize.language`. Optional prompt override at `prompts.research_summary_template`. For OpenAI, set `OPENAI_API_KEY` in the environment. |
-| **Output paths** | `delivery.library_dir`, `delivery.paper_dir`, `delivery.state_dir`, `delivery.logs_dir` |
-| **Scholar Inbox** | `sources.scholar_alerts.enabled`, `sources.scholar_alerts.email.provider` (`mbox` \| `eml_dir` \| `imap`), `sources.scholar_alerts.max_items_per_run`, `sources.scholar_alerts.light_filter.*` |
-| **Scholar email source** | `sources.scholar_alerts.email.mbox_path`, `sources.scholar_alerts.email.eml_dir`, or IMAP keys `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, `sources.scholar_alerts.email.imap_password_env`, `sources.scholar_alerts.email.gmail_label` |
-| **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics`; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
-| **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) |
+Main knobs in config and/or Raycast:
+
+| What | Where (config and/or Raycast) |
+|------|------------------------------|
+| **Direction, delivery, summarize, sources** | **Raycast:** set in extension Preferences when using Run Paper Agent. **CLI/cron:** add `direction`, `delivery`, `summarize`, `sources` to `config.yaml` or rely on app defaults. |
+| **Interests** | `interests.seeds` in config |
+| **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` in config; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
+| **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) in config |
 
 All dates (paths, digest filename, run date, lookback) use **system local time** only; no timezone config. For cron, set `CRON_TZ` if you want the job to run at a specific wall-clock time.
 If you enable OpenAI-based research summaries, set `OPENAI_API_KEY` in your shell environment before running the pipeline.
@@ -231,10 +225,20 @@ If your Paper Agent project lives elsewhere, set **Config file path** and **Pape
 
 For **Recent Papers**, the limit is set in extension Preferences (Recent papers limit).
 
+#### Config vs Preferences when using Run Paper Agent
+
+When you trigger **Run Paper Agent** from Raycast, the extension uses a **preference-first** rule for four config sections:
+
+- **direction** (limits, categories, keywords, queries), **delivery** (paper_dir, etc.), **summarize** (LLM summary), and **sources** (arXiv + Scholar Inbox) are built **entirely from extension Preferences**. Values in `config.yaml` for these sections are **not** used for the Run Paper Agent command.
+- The rest of the config (interests, policy, selection, feedback, export, advanced, prompts) is still read from `config.yaml`. So you keep one config file for policy, export, and other knobs; Run Paper Agent gets direction/delivery/summarize/sources only from Raycast Preferences.
+
+For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the app reads the full config from YAML. If `direction`, `delivery`, `summarize`, or `sources` are missing in the file, the Python app uses its built-in defaults.
+
 ### Commands
 
 | Command | Description |
 |--------|-------------|
+| **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, and sources from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done or on failure. |
 | **Today Papers** | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), Open local note (when a matching `.md` exists). Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`. |
 | **Recent Papers** | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. |
 | **Search Papers** | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). |
