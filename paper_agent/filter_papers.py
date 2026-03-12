@@ -76,9 +76,9 @@ def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
     allow_cat = set(normalize_text(c) for c in direction.allow_categories if c)
     deny_cat = set(normalize_text(c) for c in direction.deny_categories if c)
 
-    ranked: list[RankedPaper] = []
+    # First pass: category + exclude only; record keyphrase/seed match per candidate.
+    candidates: list[tuple[Paper, bool, bool]] = []
     for paper in papers:
-        # Category filter: allow_categories and deny_categories (case-insensitive)
         if allow_cat or deny_cat:
             paper_cats = set(normalize_text(c) for c in paper.categories)
             if allow_cat and not (paper_cats & allow_cat):
@@ -88,17 +88,23 @@ def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
 
         combined = normalize_text(paper.title) + " " + normalize_text(paper.summary)
         combined_with_authors = combined + " " + " ".join(normalize_text(a) for a in paper.authors)
-
-        # Direction: exclude_keywords always excludes.
         if text_matches_any(combined_with_authors, exclude_kw):
             continue
 
-        # Interest gate: when keyphrases non-empty, require keyphrase match OR seed match
         keyphrase_match = bool(keyphrases) and text_matches_any(combined, keyphrases)
         seed_match = paper_id_in_seeds(paper.id, seeds)
-        if keyphrases and not keyphrase_match and not seed_match:
-            continue
+        candidates.append((paper, keyphrase_match, seed_match))
 
+    # Interest gate: when keyphrases set, require keyphrase or seed match *only if*
+    # at least one candidate in this batch matches. Otherwise allow all candidates
+    # through so the run is not empty when keyphrases are too narrow for today's feed.
+    any_hit = any(kp or sd for _, kp, sd in candidates)
+    enforce_gate = bool(keyphrases) and any_hit
+
+    ranked: list[RankedPaper] = []
+    for paper, keyphrase_match, seed_match in candidates:
+        if enforce_gate and not keyphrase_match and not seed_match:
+            continue
         why = build_why_this_paper(paper, keyphrases, seeds)
         ranked.append(RankedPaper(paper=paper, why_this_paper=why))
 
