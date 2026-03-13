@@ -50,7 +50,7 @@ type ExtensionPreferences = {
   "scholarImapUser": string,
   /** Scholar IMAP password env var - Environment variable name for IMAP password (e.g. IMAP_PASSWORD). */
   "scholarImapPasswordEnv": string,
-  /** Scholar IMAP password - Optional. If set, used as the IMAP password (env var name above). Leave empty to use the value from your environment. */
+  /** Scholar IMAP password - Optional. If set, used as the IMAP password (env var name above). All whitespace is removed, so Google app passwords work whether pasted with or without spaces. Leave empty to use the value from your environment. */
   "scholarImapPassword": string,
   /** Scholar Gmail label - Gmail label/mailbox to read (e.g. scholar-alerts). */
   "scholarGmailLabel": string,

@@ -204,7 +204,7 @@
       "name": "scholarImapPassword",
       "type": "password",
       "title": "Scholar IMAP password",
-      "description": "Optional. If set, used as the IMAP password (env var name above). Leave empty to use the value from your environment.",
+      "description": "Optional. If set, used as the IMAP password (env var name above). All whitespace is removed, so Google app passwords work whether pasted with or without spaces. Leave empty to use the value from your environment.",
       "placeholder": "",
       "default": ""
     },

@@ -37,6 +37,10 @@ function parseRequiredPositiveInt(value: string | undefined, fieldName: string):
   return { ok: true, value: n };
 }
 
+function stripAllWhitespace(value: string | undefined): string {
+  return (value ?? "").replace(/\s+/g, "");
+}
+
 /**
  * Merge YAML config with Raycast preferences. Preferences override YAML when the pref has a value
  * (for text fields: when non-empty after trim; for checkbox/dropdown: always).
@@ -124,7 +128,7 @@ function buildRunEnv(): NodeJS.ProcessEnv {
     env.OPENAI_API_KEY = openaiKey;
   }
   const imapEnvName = prefs.scholarImapPasswordEnv?.trim() || "IMAP_PASSWORD";
-  const imapPassword = prefs.scholarImapPassword?.trim();
+  const imapPassword = stripAllWhitespace(prefs.scholarImapPassword);
   if (imapPassword) {
     env[imapEnvName] = imapPassword;
   }
@@ -228,7 +232,7 @@ function prepareRun(): PrepareResult {
       return { ok: false, title: "Invalid preference", message: "Scholar IMAP password env var is required when Scholar Inbox is enabled." };
     }
     const imapEnvName = prefs.scholarImapPasswordEnv?.trim() || "IMAP_PASSWORD";
-    const hasImapPassword = !!(prefs.scholarImapPassword?.trim() || process.env[imapEnvName]);
+    const hasImapPassword = !!(stripAllWhitespace(prefs.scholarImapPassword) || process.env[imapEnvName]);
     if (!hasImapPassword) {
       return {
         ok: false,
