@@ -24,7 +24,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 
 ## Key features
 
-- **Daily Precision (arXiv):** Interest-aware ranking with explainable signals, plus optional exploration/diversity controls.
+- **Daily Precision (arXiv):** Explainable filtering and ranking with required keywords (`OR` match in title or abstract), exclude keywords, and seed support.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
 - **Workflow-friendly outputs:** Generate local notes, daily digests, and BibTeX/RIS exports.
@@ -176,7 +176,11 @@ Papers: 3
 
 ### Daily Precision (arXiv)
 
-- Fetched via arXiv API; filtered by categories/keywords/authors; scored by policy (deterministic or LinUCB); constrained selection (exploration, topic cap, min topics).
+- Fetched via arXiv API, then filtered in this order: `lookback_days` -> categories -> exclude keywords -> required keywords / seeds.
+- **Required keywords** = `direction.include_keywords`: `OR` match. A paper is kept if at least one phrase appears in the **title** or **abstract**. It does not need to match all phrases, and it does not need to match both title and abstract.
+- **Exclude keywords** = `direction.exclude_keywords`: `OR` match on **title + abstract + authors** combined. If any exclude phrase matches, the paper is dropped.
+- **Seeds**: if a paper ID is listed in `interests.seeds`, it can pass even when it matches no required keyword.
+- With the current default policy (`off`), ranking is explainable and simple: title keyword match > abstract keyword match > seed match, then newer papers first.
 - **Capped by `direction.max_papers_per_day`.**
 
 ### Scholar Inbox (email alerts)
