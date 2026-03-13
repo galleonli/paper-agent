@@ -9,7 +9,11 @@ from paper_agent.models import Paper
 from paper_agent.output.local import write_local_note, write_daily_digest
 
 
-def _ranked(paper_id: str = "2301.12345", title: str = "Test Paper", why: str | None = "Keyphrase matched") -> RankedPaper:
+def _ranked(
+    paper_id: str = "2301.12345",
+    title: str = "Test Paper",
+    why: str | None = "Required keyword matched",
+) -> RankedPaper:
     return RankedPaper(
         paper=Paper(
             id=paper_id,
@@ -35,7 +39,7 @@ def test_write_local_note(tmp_path: Path) -> None:
     assert path.name == "2301.12345.md"
     text = path.read_text(encoding="utf-8")
     assert "Test Paper" in text
-    assert "Keyphrase matched" in text
+    assert "Required keyword matched" in text
     assert "arxiv.org/abs/2301.12345" in text
     json_path = path.with_suffix(".json")
     assert json_path.exists()
@@ -50,7 +54,7 @@ def test_write_local_note(tmp_path: Path) -> None:
     assert metadata["categories"] == ["cs.LG"]
     assert metadata["note_path"] == "library/2024-01-15/2301.12345.md"
     assert metadata["published"] == "2023-01-15"
-    assert metadata["why_this_paper"] == "Keyphrase matched"
+    assert metadata["why_this_paper"] == "Required keyword matched"
     assert "summary" not in metadata
 
 

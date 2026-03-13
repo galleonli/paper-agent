@@ -116,9 +116,9 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     for r in ranked_all:
         topic_id = r.paper.categories[0] if r.paper.categories else "default"
         why_lower = (r.why_this_paper or "").lower()
-        if "title" in why_lower and "keyphrase" in why_lower:
+        if "title" in why_lower and "required keyword" in why_lower:
             score = 1.5
-        elif "abstract" in why_lower and "keyphrase" in why_lower:
+        elif "abstract" in why_lower and "required keyword" in why_lower:
             score = 1.2
         elif "seed" in why_lower:
             score = 1.1
@@ -149,15 +149,8 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         topic_cap=config.selection.topic_cap,
         min_topics=config.selection.min_topics,
     )
-    # Build why_this_paper: append exploration/novelty when selection chose for exploration
-    def _why_with_selection(s: ScoredPaper) -> str:
-        why = s.why_this_paper or "—"
-        if getattr(s, "exploration_pick", False):
-            why = f"{why} (exploration)"
-        return why
-
     ranked_all = [
-        RankedPaper(paper=s.paper, why_this_paper=_why_with_selection(s))
+        RankedPaper(paper=s.paper, why_this_paper=s.why_this_paper or "—")
         for s in selected_scored
     ]
     selected = len(ranked_all)

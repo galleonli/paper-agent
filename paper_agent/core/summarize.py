@@ -40,7 +40,7 @@ Paper metadata:
 - Categories: {paper_categories}
 - arXiv ID: {paper_id}
 - arXiv URL: {paper_link_abs}
-- Matched keyphrases (user interests): {keyphrases}
+- Matched required keywords (current filter): {keyphrases}
 - Direction include_keywords: {include_kw}
 - Existing why_this_paper (selection rationale): {why_text}
 
@@ -63,7 +63,7 @@ Please output the summary in plain text with the following numbered sections:
 - Highlight the 1-2 design choices that most directly address the motivation (e.g., a specific loss, memory mechanism, routing/gating, etc.).
 
 5. Relevance for the user
-- In 1-2 sentences, explain why this paper could be useful for someone interested in the user's keyphrases and queries (e.g., continual learning with routing/gating, mixture-of-experts, etc.).
+- In 1-2 sentences, explain why this paper could be useful for someone interested in the user's required keywords and queries (e.g., continual learning with routing/gating, mixture-of-experts, etc.).
 
 If the metadata is insufficient to answer a specific bullet reliably, explicitly say
 "Information insufficient to judge" for that bullet instead of guessing.

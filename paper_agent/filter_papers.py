@@ -17,7 +17,7 @@ from paper_agent.core.utils import normalize_text, phrases_matching_text, text_m
 
 @dataclass
 class RankedPaper:
-    """Paper with why_this_paper explanation (which keyphrase/seed matched, title vs abstract)."""
+    """Paper with why_this_paper explanation (which required keyword/seed matched, title vs abstract)."""
 
     paper: Paper
     why_this_paper: Optional[str] = None
@@ -52,7 +52,8 @@ def build_why_this_paper(
     abstract_match: bool = False,
 ) -> str:
     """
-    Build human-readable explanation: which keyphrases matched (title vs abstract) and/or seeds.
+    Build human-readable explanation: which required keywords matched (title vs abstract)
+    and/or whether the paper came from seeds.
     Uses the same matching rules as the filter (phrases_matching_text / word boundaries) so the
     explanation and tier scoring stay consistent.
     """
@@ -60,15 +61,15 @@ def build_why_this_paper(
     matched_in_title = phrases_matching_text(paper.title, keyphrases) if title_match else []
     matched_in_abstract = phrases_matching_text(paper.summary, keyphrases) if abstract_match else []
     if matched_in_title:
-        parts.append(f"Keyphrase(s) in title: {', '.join(matched_in_title)}")
+        parts.append(f"Required keyword(s) in title: {', '.join(matched_in_title)}")
     if matched_in_abstract and not matched_in_title:
-        parts.append(f"Keyphrase(s) in abstract: {', '.join(matched_in_abstract)}")
+        parts.append(f"Required keyword(s) in abstract: {', '.join(matched_in_abstract)}")
     elif matched_in_abstract:
         others = [p for p in matched_in_abstract if p not in matched_in_title]
         if others:
-            parts.append(f"Also in abstract: {', '.join(others)}")
+            parts.append(f"Also matched in abstract: {', '.join(others)}")
     if paper_id_in_seeds(paper.id, seeds):
-        parts.append("In your seeds")
+        parts.append("Matches one of your seeds")
     return "; ".join(parts) if parts else "—"
 
 
@@ -123,9 +124,9 @@ def filter_and_rank(papers: list[Paper], config: Config) -> list[RankedPaper]:
     # Rank: title match first, then abstract match, then seed, then rest; within tier, newer first
     def tier_key(r: RankedPaper) -> int:
         why = (r.why_this_paper or "").lower()
-        if "title" in why and "keyphrase" in why:
+        if "title" in why and "required keyword" in why:
             return 0
-        if "abstract" in why and "keyphrase" in why:
+        if "abstract" in why and "required keyword" in why:
             return 1
         if "seed" in why:
             return 2

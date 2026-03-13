@@ -32,7 +32,7 @@ def test_build_research_summary_calls_openai_with_model_and_timeout() -> None:
         "paper_agent.core.summarize._call_openai_chat",
         return_value="Structured summary body.",
     ) as call_mock:
-        out = build_research_summary(_paper(), "Keyphrase matched", cfg)
+        out = build_research_summary(_paper(), "Required keyword matched", cfg)
 
     assert out is not None
     heading, body = out

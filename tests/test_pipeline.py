@@ -44,6 +44,7 @@ def test_run_returns_ranked_papers_with_why_this_paper_when_new_items(tmp_path: 
     assert len(result) == 1
     assert isinstance(result[0], RankedPaper)
     assert hasattr(result[0], "paper") and hasattr(result[0], "why_this_paper")
+    assert "(exploration)" not in (result[0].why_this_paper or "")
 
 
 def test_run_with_off_policy_logs_diversity_metrics(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

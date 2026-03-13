@@ -24,7 +24,7 @@ def _paper(
     )
 
 
-def test_filter_negative_keyphrase() -> None:
+def test_filter_negative_required_keyword() -> None:
     """Papers matching exclude_keywords are excluded (case-insensitive)."""
     config = Config(
         interests=InterestsConfig(seeds=[]),
@@ -45,7 +45,7 @@ def test_filter_negative_keyphrase() -> None:
     assert result[0].paper.id == "2"
 
 
-def test_why_this_paper_set_when_keyphrase_matches() -> None:
+def test_why_this_paper_set_when_required_keyword_matches() -> None:
     """When include_keywords match title/summary, why_this_paper is set."""
     config = Config(
         interests=InterestsConfig(seeds=[]),
@@ -65,8 +65,8 @@ def test_why_this_paper_set_when_keyphrase_matches() -> None:
     assert "protein" in result[0].why_this_paper.lower()
 
 
-def test_ranking_keyphrase_matches_first() -> None:
-    """Papers with keyphrase match are ranked before seed-only; when include_keywords set, non-matching excluded."""
+def test_ranking_required_keyword_matches_first() -> None:
+    """Papers with required-keyword match are ranked before seed-only; when include_keywords set, non-matching excluded."""
     config = Config(
         interests=InterestsConfig(seeds=["https://arxiv.org/abs/1"]),
         direction=DirectionConfig(
@@ -84,7 +84,7 @@ def test_ranking_keyphrase_matches_first() -> None:
     result = filter_and_rank(papers, config)
     assert len(result) == 2
     assert result[0].paper.id == "2"
-    assert "keyphrase" in (result[0].why_this_paper or "").lower()
+    assert "required keyword" in (result[0].why_this_paper or "").lower()
     assert result[1].paper.id == "1"
     assert "seed" in (result[1].why_this_paper or "").lower()
 
