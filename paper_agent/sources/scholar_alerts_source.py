@@ -98,27 +98,33 @@ def _get_received_timestamp(msg, fallback_mtime: float | None = None) -> datetim
     return None
 
 
-def _get_text_body(msg) -> str:
-    """Best-effort decoded body preferring text/plain, then text/html."""
+def _get_bodies(msg) -> tuple[str, str]:
+    """Best-effort decoded (text/plain, text/html) bodies from a message."""
+    plain_body = ""
+    html_body = ""
     if msg.is_multipart():
-        html_fallback = ""
         for part in msg.walk():
+            # msg.walk() yields multipart container nodes too; skip them and only decode leaf parts.
+            if part.is_multipart():
+                continue
             ctype = (part.get_content_type() or "").lower()
-            if ctype == "text/plain":
-                raw = part.get_payload(decode=True)
-                if raw:
-                    return raw.decode("utf-8", errors="replace")
-                return ""
-            if ctype == "text/html" and not html_fallback:
-                raw = part.get_payload(decode=True)
-                if raw:
-                    html_fallback = raw.decode("utf-8", errors="replace")
-        if html_fallback:
-            return html_fallback
+            raw = part.get_payload(decode=True)
+            if not raw:
+                continue
+            decoded = raw.decode("utf-8", errors="replace")
+            if ctype == "text/plain" and not plain_body:
+                plain_body = decoded
+            elif ctype == "text/html" and not html_body:
+                html_body = decoded
+        return plain_body, html_body
     raw = msg.get_payload(decode=True)
-    if raw:
-        return raw.decode("utf-8", errors="replace")
-    return ""
+    if not raw:
+        return "", ""
+    decoded = raw.decode("utf-8", errors="replace")
+    ctype = (msg.get_content_type() or "").lower()
+    if ctype == "text/html" or _looks_like_html(decoded):
+        return "", decoded
+    return decoded, ""
 
 
 def _extract_items_from_body(text: str) -> list[tuple[str, str, str]]:
@@ -233,11 +239,10 @@ def _parse_message(msg, fallback_mtime: float | None = None) -> list[_RawItem]:
     """Parse one email into raw items (title, link, snippet, received_ts)."""
     received = _get_received_timestamp(msg, fallback_mtime)
     subject = (msg.get("Subject") or "").strip() or "Scholar Alert"
-    body = _get_text_body(msg)
-    if _looks_like_html(body):
-        triples = _extract_items_from_html(body)
-    else:
-        triples = _extract_items_from_body(body)
+    plain_body, html_body = _get_bodies(msg)
+    triples = _extract_items_from_html(html_body) if html_body else []
+    if not triples and plain_body:
+        triples = _extract_items_from_body(plain_body)
     out: list[_RawItem] = []
     for title_frag, link, snippet in triples:
         title = title_frag or subject

@@ -3,6 +3,7 @@
 import os
 import shutil
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from pathlib import Path
 from unittest.mock import patch
 
@@ -82,6 +83,38 @@ def test_parse_html_eml_extract_items() -> None:
     assert "https://example.com/manipulation-paper" in links
     titles = [it[2] for it in items]
     assert any("Continual Learning with Sparse Experts" in t for t in titles)
+
+
+def test_parse_multipart_email_prefers_html_when_plain_has_no_links() -> None:
+    """Multipart Scholar emails should parse the HTML part when plain text lacks usable paper links."""
+    msg = EmailMessage()
+    msg["From"] = "Google Scholar Alerts <scholaralerts-noreply@google.com>"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "New results for continual learning"
+    msg["Date"] = "Thu, 06 Mar 2026 10:00:00 +0000"
+    msg.set_content("View this alert in your browser.")
+    msg.add_alternative(
+        """\
+<!doctype html>
+<html>
+  <body>
+    <h3>
+      <a class="gse_alrt_title" href="https://scholar.google.com/scholar_url?url=https%3A%2F%2Farxiv.org%2Fabs%2F2602.00001&hl=en">
+        Continual Learning with Sparse Experts
+      </a>
+    </h3>
+    <div class="gse_alrt_sni">This paper studies continual learning with sparse routing.</div>
+  </body>
+</html>
+""",
+        subtype="html",
+    )
+
+    items = scholar_alerts_source.parse_eml_extract_items(msg.as_bytes())
+
+    assert len(items) == 1
+    assert items[0][3] == "https://arxiv.org/abs/2602.00001"
+    assert "Continual Learning with Sparse Experts" in items[0][2]
 
 
 def test_parse_mbox_extract_items() -> None:
