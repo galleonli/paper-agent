@@ -43,11 +43,11 @@ cp config.example.yaml config.yaml
 python -m paper_agent run --config config.yaml
 ```
 
-Edit `config.yaml` as needed (e.g. `interests.seeds`, `policy`, `export`). If you use **Run Paper Agent** from Raycast, set direction/delivery/summarize/sources in extension Preferences; for CLI/cron, add those sections to config or use defaults.
+Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, set direction/delivery/summarize/sources in extension Preferences; for CLI/cron, add those sections to config or use defaults.
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
 
-OpenAI summarization is optional. If you do not set `OPENAI_API_KEY`, the pipeline still runs and falls back to abstract/snippet-based notes.
+OpenAI summarization is optional. For CLI/cron, set `OPENAI_API_KEY` in your environment if needed. For Raycast, you can instead fill **OpenAI API Key** directly in extension Preferences. If no key is available, the pipeline still runs and falls back to abstract/snippet-based notes.
 
 ### CLI commands
 
@@ -107,7 +107,7 @@ Recommended:
 
 ## Configuration (user settings first)
 
-Copy `config.example.yaml` to `config.yaml`. The example config omits **direction**, **delivery**, **summarize**, and **sources**; when you use **Run Paper Agent** from the Raycast extension, those are taken from extension Preferences only (see [Raycast → Config vs Preferences](#config-vs-preferences-when-using-run-paper-agent)). For CLI or cron runs, add those sections to `config.yaml` if you need non-default behavior; otherwise the app uses built-in defaults.
+Copy `config.example.yaml` to `config.yaml`. The example config keeps the always-useful local sections (`interests`, `delivery.state_dir`, `delivery.logs_dir`, `selection`, `export`, `advanced`, `prompts`) and omits the Raycast-managed sections for running from the extension (`direction`, most of `delivery`, `summarize`, and `sources`). When you use **Run Paper Agent** from Raycast, those runtime sections are taken from extension Preferences only (see [Raycast → Config vs Preferences](#config-vs-preferences-when-using-run-paper-agent)). For CLI or cron runs, add those sections to `config.yaml` if you need non-default behavior; otherwise the app uses built-in defaults.
 
 Main knobs in config and/or Raycast:
 
@@ -115,11 +115,12 @@ Main knobs in config and/or Raycast:
 |------|------------------------------|
 | **Direction, delivery, summarize, sources** | **Raycast:** set in extension Preferences when using Run Paper Agent. **CLI/cron:** add `direction`, `delivery`, `summarize`, `sources` to `config.yaml` or rely on app defaults. |
 | **Interests** | `interests.seeds` in config |
-| **Policy (discovery only)** | `policy.type` (`deterministic` \| `linucb`), `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` in config; advanced tuning in [TUNING.md](TUNING.md) (`policy.*`, `autotune.*`) |
+| **Discovery ranking / selection** | Current discovery flow uses required-keyword tiers: title keyword match > abstract keyword match > seed match. Final picks still go through `selection.*` (`max_papers_per_day`, `explore_ratio`, `topic_cap`, `min_topics`). `policy.type: "off"` is the intended/default setting; legacy policy knobs remain in config mainly for backward compatibility. |
 | **Export** | `export.formats` (e.g. `["bibtex", "ris"]`) in config |
+| **Advanced fetch limit** | `advanced.max_results_per_query` in config. Default: `9999`. This is a per-run fetch cap for arXiv discovery, not an infinite mode. In code it is validated as `Field(default=9999, ge=1, le=9999)`, meaning: use `9999` if omitted, and only allow values from `1` to `9999`. |
 
 All dates (paths, digest filename, run date, lookback) use **system local time** only; no timezone config. For cron, set `CRON_TZ` if you want the job to run at a specific wall-clock time.
-If you enable OpenAI-based research summaries, set `OPENAI_API_KEY` in your shell environment before running the pipeline.
+If you enable OpenAI-based research summaries, provide an API key either via `OPENAI_API_KEY` (CLI/cron) or the Raycast **OpenAI API Key** preference (extension run).
 
 Example:
 
@@ -147,7 +148,7 @@ If you want to customize the research-summary prompt, leave the built-in default
 | **Notes** | `library/YYYY-MM-DD/{id}.md` | Title, ID, published, authors, link, categories, source, abstract, why-this-paper, and key points. Discovery notes may include an optional `Research-focused summary`; Scholar notes stay light and may use placeholders when abstract is missing. |
 | **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json` | Machine-readable mirror of each note (id, title, authors, link, abstract, why_this_paper, optional research_summary, etc.) for scripts and `today` / `list --json`. |
 | **Digest** | `daily/YYYY-MM-DD.md` | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`. |
-| **Log** | `logs/latest.log` | One line per run: `fetched_total`, `selected`, `new_count`, `pushed_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`, etc. |
+| **Log** | `logs/latest.log` | One line per run with fetch/filter/selection summary fields such as `fetched_total`, `after_category`, `after_filters`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_provider`, plus selection / autotune diagnostics. |
 | **Exports** | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`). |
 
 Example digest snippet:
@@ -180,7 +181,8 @@ Papers: 3
 - **Required keywords** = `direction.include_keywords`: `OR` match. A paper is kept if at least one phrase appears in the **title** or **abstract**. It does not need to match all phrases, and it does not need to match both title and abstract.
 - **Exclude keywords** = `direction.exclude_keywords`: `OR` match on **title + abstract + authors** combined. If any exclude phrase matches, the paper is dropped.
 - **Seeds**: if a paper ID is listed in `interests.seeds`, it can pass even when it matches no required keyword.
-- With the current default policy (`off`), ranking is explainable and simple: title keyword match > abstract keyword match > seed match, then newer papers first.
+- With the current default flow (`policy.type: "off"`), candidates are tiered by title keyword match > abstract keyword match > seed match, then newer papers first.
+- Final picks still go through `selection.*` constraints such as `max_papers_per_day`, `topic_cap`, `min_topics`, and `explore_ratio`.
 - **Capped by `direction.max_papers_per_day`.**
 
 ### Scholar Inbox (email alerts)
@@ -202,7 +204,7 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 ## Raycast extension
 
-A [Raycast](https://www.raycast.com/) extension provides a minimal interface for browsing today's local papers and opening local Markdown notes from a Paper Agent workflow.
+A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, and open the paper repo from a Paper Agent workflow.
 
 **Status:** Early MVP. The API and behavior may change between versions.
 
@@ -233,7 +235,7 @@ For **Recent Papers**, the limit is set in extension Preferences (Recent papers 
 
 When you trigger **Run Paper Agent** from Raycast, the extension uses a **preference-first** rule for four config sections:
 
-- **direction** (limits, categories, keywords, queries), **delivery** (paper_dir, etc.), **summarize** (LLM summary), and **sources** (arXiv + Scholar Inbox) are built **entirely from extension Preferences**. Values in `config.yaml` for these sections are **not** used for the Run Paper Agent command.
+- **direction** (limits, categories, keywords, queries), **delivery** (paper_dir and derived library path), **summarize** (LLM summary), and **sources** (arXiv + Scholar Inbox) are built **entirely from extension Preferences**. Values in `config.yaml` for these sections are **not** used for the Run Paper Agent command, except that local-only paths like `delivery.state_dir` and `delivery.logs_dir` still come from config.
 - The rest of the config (interests, policy, selection, feedback, export, advanced, prompts) is still read from `config.yaml`. So you keep one config file for policy, export, and other knobs; Run Paper Agent gets direction/delivery/summarize/sources only from Raycast Preferences.
 
 For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the app reads the full config from YAML. If `direction`, `delivery`, `summarize`, or `sources` are missing in the file, the Python app uses its built-in defaults.
@@ -259,7 +261,7 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 ### Logs and state
 
 - **Where are logs?**  
-  `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `fetched_total`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_pushed`, `scholar_provider`. Inspect this first when something looks wrong.
+  `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `fetched_total`, `after_category`, `after_filters`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_provider`, and selection diagnostics such as `num_topics` / `exploration_picks`. Inspect this first when something looks wrong.
 
 - **Second run still shows new papers / duplicates?**  
   Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Use the same `library_dir` and `paper_dir` across runs. If you changed the repo path or run from a different working directory, state may not be found and papers can be treated as new again.
@@ -270,14 +272,14 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
   Run with an explicit path: `python -m paper_agent run --config config.yaml`. Ensure the file exists and is valid YAML. Typical validation errors: unknown `export.formats` value, invalid `sources.scholar_alerts.email.provider`, invalid `policy.type`. Fix the reported key and re-run.
 
 - **No discovery papers at all (arXiv)?**  
-  Check: (1) `direction.allow_categories` or `direction.queries` — at least one must yield results. (2) `direction.lookback_days` — papers are filtered by update date within this window. (3) `interests.keyphrases` — if non-empty, each paper needs at least one keyphrase match or seed match to pass. Relax filters or add keyphrases and re-run.
+  Check: (1) `direction.allow_categories` or `direction.queries` — at least one must yield results. (2) `direction.lookback_days` — papers are filtered by update date within this window. (3) `direction.include_keywords` / Required keywords — if non-empty, each paper needs at least one keyword match in the title or abstract, or a seed match, to pass. Relax filters or add keywords and re-run.
 
 ### Scholar Inbox
 
 - **No Scholar items?**  
   - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, or `imap`.  
   - **mbox/eml_dir:** Set `sources.scholar_alerts.email.mbox_path` or `sources.scholar_alerts.email.eml_dir`; ensure messages exist and are within `direction.lookback_days`.  
-  - **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; put the password in the environment (e.g. `IMAP_PASSWORD`). If `sources.scholar_alerts.email.gmail_label` is configured and supported by the current implementation, the agent attempts to read from that label; otherwise it reads from `INBOX`.  
+- **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; for CLI/cron put the password in the environment (e.g. `IMAP_PASSWORD`), while Raycast can also pass it from the **Scholar IMAP password** preference. If `sources.scholar_alerts.email.gmail_label` is configured and supported by the current implementation, the agent attempts to read from that label; otherwise it reads from `INBOX`.  
   - Check `logs/latest.log` for `scholar_provider` and `scholar_new` to confirm the source and count.
 
 - **IMAP login works but no papers are extracted?**  
@@ -286,7 +288,7 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 ### Summarization (optional)
 
 - **Research summary missing or "OPENAI_API_KEY is not set"?**
-  The research-focused summary is optional. If `summarize.enabled` is true and you want LLM summaries, set `OPENAI_API_KEY` in your environment before running. If you do not set it, the pipeline still runs and writes notes with abstract/snippet summary only; the research-summary section is omitted. You can verify the key is visible to the process with `echo $OPENAI_API_KEY`.
+  The research-focused summary is optional. If `summarize.enabled` is true and you want LLM summaries, provide an API key via `OPENAI_API_KEY` (CLI/cron) or the Raycast **OpenAI API Key** preference. If you do not set it, the pipeline still runs and writes notes with abstract/snippet summary only; the research-summary section is omitted. You can verify the CLI key is visible to the process with `echo $OPENAI_API_KEY`.
 
 ### Cron / scheduling
 

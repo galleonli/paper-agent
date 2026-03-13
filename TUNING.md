@@ -1,16 +1,23 @@
-## Hyperparameter Tuning Guide (Advanced)
+## Hyperparameter Tuning Guide (Advanced / Legacy)
 
-This guide is for **advanced users** who want to tune bandit / agent hyperparameters beyond the defaults.
-Most users can ignore this file and only edit `interests.*`, `direction.*`, `selection.*`, and `delivery.*`
-in `config.yaml`.
+This guide is for **advanced users** who want to inspect or tune the remaining
+selection / legacy hyperparameter knobs beyond the defaults.
+Most users can ignore this file and only edit `interests.*`, `direction.*`,
+`selection.*`, and `delivery.*` in `config.yaml`.
 
 Scope note: this guide is for **Daily Precision (arXiv discovery)** only.
-Scholar Inbox (`sources.scholar_alerts.*`) does not use `policy.*`, `selection.*`, or `autotune.*`.
+Scholar Inbox (`sources.scholar_alerts.*`) does not use `policy.*`,
+`selection.*`, or `autotune.*`.
 
-For the full agent logic and AutoTune design, see:
+Current behavior summary:
 
-- `docs/agent-logic.md`
-- `docs/autotune-design.md`
+- The active/default discovery path is effectively `policy.type: "off"`.
+- Candidate ranking is based on required-keyword tiering:
+  title keyword match > abstract keyword match > seed match.
+- Final picks still go through `selection.*`
+  (`max_papers_per_day`, `explore_ratio`, `topic_cap`, `min_topics`).
+- Legacy `policy.*` / `autotune.*` fields remain in config mainly for backward
+  compatibility and experimentation, but they are not the recommended path.
 
 ---
 
@@ -18,20 +25,18 @@ For the full agent logic and AutoTune design, see:
 
 Do **not** touch `policy.*` or `autotune.*` if:
 
-- You are still shaping your **queries / keyphrases / filters**.
+- You are still shaping your **queries / required keywords / filters**.
 - You mainly care about “are these papers on-topic?” rather than micro-optimizing exploration.
 - You are running the agent for the first few weeks.
 
 For most users:
 
-- Set up:
-  - `direction.*` (categories, lookback_days, max_papers_per_day)
-  - `interests.*` (seeds, keyphrases)
-  - `feedback.*` (blocked/boosted phrases/authors)
-  - `selection.*` (explore_ratio, topic_cap, min_topics)
-- Use:
-  - `policy.type: "deterministic"` **or**
-  - `policy.type: "linucb"` with **default** hyperparameters.
+- Set up `direction.*` (categories, lookback_days, max_papers_per_day,
+  include_keywords, exclude_keywords).
+- Add `interests.seeds` only if you have useful seed papers.
+- Tune `selection.*` (`explore_ratio`, `topic_cap`, `min_topics`) only after
+  your keyword filter is working well.
+- Leave `policy.type: "off"` and ignore `policy.*` / `autotune.*`.
 
 This already gives a solid Daily Precision feed.
 
@@ -42,11 +47,14 @@ Clarification:
 
 ---
 
-### 2. Policy hyperparameters (`policy.*`)
+### 2. Legacy policy hyperparameters (`policy.*`)
 
 ```yaml
 policy:
-  type: "deterministic"   # or "linucb"
+  type: "off"             # recommended / current path
+  # Legacy compatibility only:
+  # type: "deterministic"  # accepted by config loader
+  # type: "linucb"         # accepted by config loader
   # alpha: 0.5
   # lambda_ucb: 1.0
   # mu_novelty: 0.3
@@ -54,8 +62,10 @@ policy:
 ```
 
 - **`type`**
-  - `"deterministic"`: phrase-based, fully explainable, no learning. Good baseline.
-  - `"linucb"`: contextual bandit; uses feedback + features to learn over time.
+  - `"off"`: current/default discovery path. Uses required-keyword tiering plus
+    `selection.*` constraints.
+  - `"deterministic"` / `"linucb"`: accepted by config validation for backward
+    compatibility, but not the recommended/current pipeline path.
 
 - **`alpha`** (uncertainty scale)
   - Effect: how strongly to boost **uncertain** papers.
@@ -76,15 +86,17 @@ policy:
   - Too small → overfit / unstable; too large → slow learning.
   - Safe range: `0.5–5.0`. Default `1.0` is a standard, stable choice.
 
-**Recommendation:** if you are not debugging LinUCB itself, **only change `type`** and leave other
-fields at their documented defaults.
+**Recommendation:** in the current codebase, leave `type` at `"off"` and avoid
+changing the other `policy.*` fields unless you are intentionally auditing or
+reviving legacy behavior.
 
 ---
 
-### 3. AutoTune (`autotune.*`) — optional and advanced
+### 3. AutoTune (`autotune.*`) — legacy / experimental
 
-AutoTune is an **optional meta-controller** that uses a separate bandit to tune `policy.*`
+AutoTune is an **optional meta-controller** intended to tune legacy `policy.*`
 hyperparameters based on **feedback + diversity/novelty reward**.
+It is not part of the recommended/default `policy.type: "off"` workflow.
 
 In `config.example.yaml` it is commented out and looks like:
 
@@ -117,23 +129,28 @@ In `config.example.yaml` it is commented out and looks like:
 
 #### 3.1 When to consider AutoTune
 
-- You have run the agent for **a while** and:
-  - you log feedback events (click/open/star/export/skip/mute) into `state/feedback_log.jsonl` or `state/feedback.yaml`,
-  - you want the system to automatically search for a better balance of exploration / novelty.
+- You are explicitly experimenting with the legacy tuning path, and:
+  - you log feedback events (click/open/star/export/skip/mute) into
+    `state/feedback_log.jsonl` or `state/feedback.yaml`,
+  - you want the system to automatically search for a better balance of
+    exploration / novelty.
 
 If you are not logging feedback yet, **leave `autotune.enabled=false`**.
 
 #### 3.2 Minimal AutoTune setup
 
-1. Make sure `policy.type: "linucb"`.
-2. Uncomment the `autotune` block in your `config.yaml`.
-3. Keep:
+1. Audit the current code path before relying on AutoTune in production.
+2. If you still want the legacy experiment, set `policy.type: "linucb"` and
+   verify that the runtime path you want is still present in the current code.
+3. Uncomment the `autotune` block in your `config.yaml`.
+4. Keep:
    - `enabled: true`
    - `method: "thompson"`
    - A small set of candidates (e.g. 2–3) that differ in `alpha`, `lambda_ucb`, `mu_novelty`.
-4. Ensure feedback events are written daily; see `docs/autotune-design.md` for the event schema.
+5. Ensure feedback events are written daily.
 
-AutoTune is active only when **both** are true:
+In the current codebase, AutoTune is only relevant for the legacy experiment and
+is active only when **both** are true:
 
 - `autotune.enabled: true`
 - `policy.type: "linucb"`
@@ -150,16 +167,19 @@ AutoTune will:
 ### 4. Safe tuning workflow
 
 1. **Lock config for 1–2 weeks**
-   - Only adjust `interests.*`, `direction.*`, `selection.*`.
-   - Keep `policy.type` fixed (start with `"deterministic"`).
-2. **Switch to LinUCB**
-   - Set `policy.type: "linucb"`, but leave other `policy.*` at default.
-   - Run for a while and inspect `logs/latest.log` and `state/preferences.json`.
-3. **Consider AutoTune (optional)**
+   - Only adjust `interests.*`, `direction.*`, and `selection.*`.
+   - Keep `policy.type: "off"`.
+2. **Tune selection only if needed**
+   - Adjust `topic_cap`, `min_topics`, or `explore_ratio` after your keyword
+     filter is stable.
+   - Inspect `logs/latest.log` to see `after_filters`, `selected`, `num_topics`,
+     and `exploration_picks`.
+3. **Consider legacy experiments only if necessary**
    - Only if you are comfortable with the current behavior and have feedback logs.
-   - Start with very few candidates and modest differences.
+   - Start with very few changes and verify the actual runtime path in code.
 4. **Change one thing at a time**
-   - Do not change `direction.*`, `selection.*`, `policy.*`, and `autotune.*` all at once.
+   - Do not change `direction.*`, `selection.*`, `policy.*`, and `autotune.*`
+     all at once.
    - After each change, run for several days before drawing conclusions.
 
 If in doubt, prefer **simpler config** and let the defaults work for you.
