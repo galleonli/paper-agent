@@ -103,7 +103,7 @@ selection:
 advanced:
   request_timeout_seconds: 30
   max_retries: 3
-  max_results_per_query: 100
+  max_results_per_query: 9999
 
 # -----------------------------------------------------------------------------
 # Optional prompt overrides (advanced; omit to use built-in defaults)

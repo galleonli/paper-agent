@@ -3,7 +3,7 @@ Load and validate config from YAML. Fail fast with clear errors.
 
 Schema and default values are aligned with config.example.yaml:
 - direction: max_papers_per_day=15, lookback_days=3
-- policy.type: "deterministic"
+- policy.type: "off" (legacy deterministic/linucb values still validate for backward compatibility)
 - sources.scholar_alerts: mode=email, email.provider (mbox/eml_dir/gmail/imap), light_filter, ordering=arrival only.
 - Scholar Inbox never counts toward max_papers_per_day and never participates in exploration/diversity (hardcoded).
 """
@@ -82,7 +82,7 @@ class AdvancedConfig(BaseModel):
 
     request_timeout_seconds: int = Field(default=30, ge=5, le=300)
     max_retries: int = Field(default=3, ge=0, le=10)
-    max_results_per_query: int = Field(default=100, ge=1, le=500)
+    max_results_per_query: int = Field(default=9999, ge=1, le=9999)
 
 
 class AutotuneRewardSignalsConfig(BaseModel):

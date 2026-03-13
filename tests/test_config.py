@@ -36,7 +36,7 @@ export:
 advanced:
   request_timeout_seconds: 30
   max_retries: 3
-  max_results_per_query: 100
+  max_results_per_query: 9999
 """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml_content, encoding="utf-8")
@@ -157,7 +157,7 @@ sources:
 advanced:
   request_timeout_seconds: 30
   max_retries: 3
-  max_results_per_query: 100
+  max_results_per_query: 9999
 """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml_content, encoding="utf-8")
