@@ -7,6 +7,9 @@ config.yaml
 # Root-level TODO (personal/local task list; do not commit)
 TODO.md
 
+# Local docs scratch space
+docs/
+
 # Google Takeout exports (personal data: mail, blocked addresses, etc.; never commit)
 Takeout/
 
