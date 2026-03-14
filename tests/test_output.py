@@ -7,10 +7,12 @@ from pathlib import Path
 from paper_agent.filter_papers import RankedPaper
 from paper_agent.models import Paper
 from paper_agent.output.local import (
+    _collect_weekly_topic_counts,
     _score_related_candidate,
     enrich_related_local_papers,
     write_daily_digest,
     write_local_note,
+    write_weekly_digest,
 )
 
 
@@ -98,6 +100,81 @@ def test_digest_two_sections_format(tmp_path: Path) -> None:
     assert "### Discovery A" in text
     assert "### Scholar B" in text
     assert "../library/2025-01-01/" in text
+
+
+def test_write_weekly_digest_aggregates_full_week(tmp_path: Path) -> None:
+    """Weekly digest should aggregate papers across the whole local week window."""
+    monday = date(2025, 1, 6)
+    wednesday = date(2025, 1, 8)
+    sunday = date(2025, 1, 12)
+
+    write_local_note(_ranked("m1", "Monday Discovery", "Matched replay keyword"), tmp_path / "library", monday, source="arxiv")
+    write_local_note(
+        RankedPaper(
+            paper=Paper(
+                id="scholar-wed",
+                title="Wednesday Scholar",
+                summary="",
+                authors=["Author"],
+                categories=[],
+                updated="2025-01-08T00:00:00Z",
+                link_abs="https://example.com/wed",
+                link_pdf=None,
+            ),
+            why_this_paper="From your Scholar Inbox.",
+        ),
+        tmp_path / "library",
+        wednesday,
+        source="scholar_alerts",
+    )
+    write_local_note(_ranked("sun1", "Sunday Discovery", "Matched memory keyword"), tmp_path / "library", sunday, source="arxiv")
+
+    path = write_weekly_digest(tmp_path / "library", tmp_path / "daily", sunday)
+
+    assert path.exists()
+    assert path.name == "2025-01-06_to_2025-01-12.md"
+    text = path.read_text(encoding="utf-8")
+    assert "# Weekly digest" in text
+    assert "## Summary" in text
+    assert "## Highlights" in text
+    assert "Monday Discovery" in text
+    assert "Wednesday Scholar" in text
+    assert "Sunday Discovery" in text
+    assert "Top topics:" in text
+    assert "Top categories:" in text
+    assert "Frequent authors:" in text
+    assert "Highlights: Sunday Discovery; Monday Discovery; Wednesday Scholar" in text
+    assert "This week focused on" in text
+    assert "### Sunday Discovery (2025-01-12)" in text
+    assert "- **Why highlighted**:" in text
+    assert "## Daily Precision" in text
+    assert "## Scholar Inbox" in text
+    assert "../../library/2025-01-06/m1.md" in text
+    assert "../../library/2025-01-08/scholar-wed.md" in text
+    assert "../../library/2025-01-12/sun1.md" in text
+
+
+def test_collect_weekly_topic_counts_filters_generic_tokens() -> None:
+    entries = [
+        {
+            "title": "Memory replay for reasoning agents",
+            "abstract": "Replay memory improves agent reasoning quality.",
+            "why_this_paper": "Matched keyword from your Scholar Inbox alert.",
+        },
+        {
+            "title": "Long-context memory retrieval",
+            "abstract": "Retrieval improves memory for long-context agents.",
+            "why_this_paper": "Matched keyword alert.",
+        },
+    ]
+
+    topics = _collect_weekly_topic_counts(entries, limit=5)
+
+    assert "memory" in topics
+    assert "matched" not in topics
+    assert "keyword" not in topics
+    assert "scholar" not in topics
+    assert "inbox" not in topics
 
 
 def test_write_local_note_scholar_source_and_placeholder(tmp_path: Path) -> None:

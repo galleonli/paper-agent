@@ -1,6 +1,6 @@
 import { LocalStorage } from "@raycast/api";
 import * as fs from "node:fs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Paper } from "./paper-utils";
 import { getPaperStateKey } from "./read-utils";
 
@@ -53,10 +53,13 @@ async function writeQueue(queue: QueuedPaper[]): Promise<void> {
 export function useReadingQueue() {
   const [queue, setQueue] = useState<QueuedPaper[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const queueRef = useRef<QueuedPaper[]>([]);
+  const queueWriteRef = useRef<Promise<void>>(Promise.resolve());
 
   const reloadQueue = useCallback(async () => {
     setIsLoading(true);
     const next = await readQueue();
+    queueRef.current = next;
     setQueue(next);
     setIsLoading(false);
   }, []);
@@ -69,28 +72,37 @@ export function useReadingQueue() {
 
   const isQueued = useCallback((paper: Paper) => queueKeys.has(getPaperStateKey(paper)), [queueKeys]);
 
-  const addToQueue = useCallback(
-    async (paper: Paper) => {
-      const next = sortQueue([
-        ...queue.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper)),
-        {
-          ...normalizePaper(paper),
-          queuedAt: new Date().toISOString(),
-        },
-      ]);
-      await writeQueue(next);
+  const updateQueue = useCallback(async (updater: (current: QueuedPaper[]) => QueuedPaper[]) => {
+    const nextWrite = queueWriteRef.current.then(async () => {
+      const next = updater(queueRef.current);
+      queueRef.current = next;
       setQueue(next);
-    },
-    [queue],
-  );
+      await writeQueue(next);
+    });
+    queueWriteRef.current = nextWrite.catch(() => undefined);
+    await nextWrite;
+  }, []);
 
   const removeFromQueue = useCallback(
     async (paper: Paper) => {
-      const next = queue.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper));
-      await writeQueue(next);
-      setQueue(next);
+      await updateQueue((current) => current.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper)));
     },
-    [queue],
+    [updateQueue],
+  );
+
+  const addToQueue = useCallback(
+    async (paper: Paper) => {
+      await updateQueue((current) =>
+        sortQueue([
+          ...current.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper)),
+          {
+            ...normalizePaper(paper),
+            queuedAt: new Date().toISOString(),
+          },
+        ]),
+      );
+    },
+    [updateQueue],
   );
 
   return {

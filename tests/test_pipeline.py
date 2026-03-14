@@ -1,7 +1,7 @@
 """Pipeline tests: run with arXiv disabled; policy+selection produce RankedPaper with why_this_paper."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -200,6 +200,9 @@ def test_idempotency_no_duplicate_artifacts(tmp_path: Path) -> None:
     assert (library_dir / date_subdir / "2403.00003.bib").exists()
     assert (library_dir / date_subdir / "2403.00003.ris").exists()
     assert (paper_dir / f"{datetime.now().date().isoformat()}.md").exists()
+    week_start = datetime.now().date() - timedelta(days=datetime.now().date().weekday())
+    week_end = week_start + timedelta(days=6)
+    assert (paper_dir / "weekly" / f"{week_start.isoformat()}_to_{week_end.isoformat()}.md").exists()
     assert (tmp_path / "logs" / "latest.log").exists()
     assert len(list(library_dir.glob("*/*.md"))) == 1
 

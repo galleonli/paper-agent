@@ -18,6 +18,7 @@ from paper_agent.output.local import (
     enrich_related_local_papers,
     write_daily_digest,
     write_local_note,
+    write_weekly_digest,
 )
 from paper_agent.export import write_bibtex, write_ris
 from paper_agent.sources import fetch_arxiv
@@ -270,6 +271,11 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         delivery.paper_dir,
         run_date,
     )
+    weekly_digest_path = write_weekly_digest(
+        delivery.library_dir,
+        delivery.paper_dir,
+        run_date,
+    )
 
     # Persist seen after local output for discovery feed (Scholar Inbox already persisted in source).
     save_seen(delivery.state_dir, seen_cache)
@@ -309,7 +315,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         )
 
     log.info(
-        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d num_topics=%d exploration_picks=%d digest_path=%s autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_provider=%s",
+        "fetched_total=%d after_category=%d after_filters=%d selected=%d new_count=%d num_topics=%d exploration_picks=%d digest_path=%s weekly_digest_path=%s autotune_enabled=%s autotune_method=%s autotune_candidate_name=%s autotune_daily_reward=%.4f discovery_selected=%d scholar_new=%d scholar_provider=%s",
         fetched_total,
         after_category,
         after_filters,
@@ -318,6 +324,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         num_topics,
         exploration_picks,
         str(digest_path),
+        str(weekly_digest_path),
         autotune_enabled,
         autotune_method,
         autotune_candidate_name,

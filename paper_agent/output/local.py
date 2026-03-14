@@ -5,8 +5,10 @@ daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
 
 import json
+import os
 import re
-from datetime import date
+from collections import Counter
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -166,6 +168,41 @@ _STOPWORDS = {
     "with",
 }
 
+_TOPIC_STOPWORDS = {
+    "paper",
+    "papers",
+    "matched",
+    "keyword",
+    "keywords",
+    "study",
+    "studies",
+    "method",
+    "methods",
+    "approach",
+    "approaches",
+    "model",
+    "models",
+    "task",
+    "tasks",
+    "result",
+    "results",
+    "analysis",
+    "using",
+    "based",
+    "system",
+    "systems",
+    "local",
+    "notes",
+    "note",
+    "summary",
+    "google",
+    "scholar",
+    "inbox",
+    "alert",
+    "alerts",
+    "arxiv",
+}
+
 
 def _iter_library_metadata_paths(library_dir: str | Path) -> list[Path]:
     base = Path(library_dir)
@@ -220,6 +257,22 @@ def _metadata_sort_date(value: Any) -> tuple[int, str]:
     if not text or text in {"—", "-", "unknown", "Unknown", "n/a", "N/A"}:
         return (0, "")
     return (1, text)
+
+
+def _metadata_run_date(value: Any) -> date | None:
+    text = _metadata_date(value)
+    if not text or text in {"—", "-", "unknown", "Unknown", "n/a", "N/A"}:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _week_bounds(run_date: date) -> tuple[date, date]:
+    week_start = run_date - timedelta(days=run_date.weekday())
+    week_end = week_start + timedelta(days=6)
+    return week_start, week_end
 
 
 def _build_related_entry(candidate: dict[str, Any], reasons: list[str]) -> dict[str, Any]:
@@ -325,6 +378,271 @@ def enrich_related_local_papers(
             json.dumps(target, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+
+
+def _weekly_note_href(note_path: str, paper_dir: str | Path, digest_dir: Path) -> str:
+    if not note_path.strip():
+        return ""
+    absolute_note = Path(paper_dir).parent / note_path
+    return Path(os.path.relpath(absolute_note, start=digest_dir)).as_posix()
+
+
+def _format_counter(counter: Counter[str], limit: int) -> str:
+    items = [(name, count) for name, count in counter.most_common() if name]
+    if not items:
+        return "None"
+    return ", ".join(f"{name} ({count})" for name, count in items[:limit])
+
+
+def _collect_weekly_topic_counts(entries: list[dict[str, Any]], limit: int = 5) -> list[str]:
+    counter: Counter[str] = Counter()
+    for entry in entries:
+        tokens = _tokenize_text(
+            str(entry.get("title", "")),
+            str(entry.get("abstract", "")),
+            str(entry.get("why_this_paper", "")),
+        )
+        counter.update(token for token in tokens if token not in _TOPIC_STOPWORDS)
+    return [topic for topic, _count in counter.most_common(limit)]
+
+
+def _collect_weekly_category_counts(entries: list[dict[str, Any]]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for entry in entries:
+        counter.update(_normalized_list(entry.get("categories")))
+    return counter
+
+
+def _collect_weekly_author_counts(entries: list[dict[str, Any]]) -> Counter[str]:
+    counter: Counter[str] = Counter()
+    for entry in entries:
+        counter.update(_normalized_list(entry.get("authors")))
+    return counter
+
+
+def _weekly_highlight_score(entry: dict[str, Any]) -> tuple[float, list[str]]:
+    score = 0.0
+    reasons: list[str] = []
+    source = str(entry.get("source", "")).strip()
+    why = str(entry.get("why_this_paper", "")).strip()
+    related_count = len(entry.get("related_local_papers", [])) if isinstance(entry.get("related_local_papers"), list) else 0
+    has_research_summary = isinstance(entry.get("research_summary"), dict)
+
+    if source != "scholar_alerts":
+        score += 3.0
+        reasons.append("strong relevance signal")
+    else:
+        score += 1.0
+        reasons.append("useful Scholar Inbox lead")
+
+    if why and why != "—":
+        score += 2.0
+    if has_research_summary:
+        score += 2.0
+        reasons.append("has research summary")
+    if related_count > 0:
+        score += min(related_count, 3)
+        reasons.append("links to local reading history")
+    if _metadata_sort_date(entry.get("published") or entry.get("date"))[0] == 1:
+        score += 0.5
+
+    return score, reasons[:2]
+
+
+def _select_weekly_highlights(
+    discovery_entries: list[dict[str, Any]],
+    scholar_entries: list[dict[str, Any]],
+    limit: int = 3,
+) -> list[tuple[dict[str, Any], list[str]]]:
+    scored: list[tuple[float, dict[str, Any], list[str]]] = []
+    for entry in [*discovery_entries, *scholar_entries]:
+        score, reasons = _weekly_highlight_score(entry)
+        scored.append((score, entry, reasons))
+
+    scored.sort(
+        key=lambda item: (
+            item[0],
+            _metadata_sort_date(item[1].get("published") or item[1].get("date")),
+            str(item[1].get("title", "")),
+        ),
+        reverse=True,
+    )
+    return [(entry, reasons) for _score, entry, reasons in scored[:limit]]
+
+
+def _weekly_summary_sentence(
+    top_topics: list[str],
+    category_counts: Counter[str],
+) -> str:
+    top_categories = [name for name, _count in category_counts.most_common(2) if name]
+    if top_topics and top_categories:
+        return (
+            f"This week focused on {', '.join(top_topics[:3])}, "
+            f"with most papers landing in {', '.join(top_categories)}."
+        )
+    if top_topics:
+        return f"This week focused on {', '.join(top_topics[:3])}."
+    if top_categories:
+        return f"This week was concentrated in {', '.join(top_categories)}."
+    return "This week has no dominant topic or category signal yet."
+
+
+def _append_weekly_entries(
+    lines: list[str],
+    entries: list[dict[str, Any]],
+    *,
+    paper_dir: str | Path,
+    digest_dir: Path,
+    include_why: bool,
+) -> None:
+    current_day = None
+    for entry in entries:
+        entry_day = _metadata_date(entry.get("date")) or "Unknown date"
+        if entry_day != current_day:
+            lines.append(f"### {entry_day}")
+            lines.append("")
+            current_day = entry_day
+
+        title = str(entry.get("title", "Untitled"))
+        link = str(entry.get("link", "")).strip()
+        why = str(entry.get("why_this_paper", "—")).strip() or "—"
+        note_path = str(entry.get("note_path", "")).strip()
+        note_label = Path(note_path).name if note_path else ""
+        note_href = _weekly_note_href(note_path, paper_dir, digest_dir) if note_path else ""
+
+        lines.append(f"#### {title}")
+        lines.append("")
+        if include_why:
+            lines.append(f"- **Why**: {why}")
+        if link:
+            lines.append(f"- **Link**: {link}")
+        if note_label and note_href:
+            lines.append(f"- **Local note**: [{note_label}]({note_href})")
+        lines.append("")
+
+
+def write_weekly_digest(
+    library_dir: str | Path,
+    paper_dir: str | Path,
+    run_date: date,
+) -> Path:
+    """
+    Write a weekly digest under paper_dir/weekly/ covering the current local week.
+
+    The digest is rebuilt from library metadata across the full week window, so it
+    includes papers from earlier days in the same week, not just the current run.
+    """
+    week_start, week_end = _week_bounds(run_date)
+    weekly_dir = Path(paper_dir) / "weekly"
+    weekly_dir.mkdir(parents=True, exist_ok=True)
+    path = weekly_dir / f"{week_start.isoformat()}_to_{week_end.isoformat()}.md"
+
+    weekly_by_id: dict[str, dict[str, Any]] = {}
+    for metadata_path in _iter_library_metadata_paths(library_dir):
+        metadata = _read_metadata(metadata_path)
+        if metadata is None:
+            continue
+        metadata_day = _metadata_run_date(metadata.get("date"))
+        if metadata_day is None or not (week_start <= metadata_day <= week_end):
+            continue
+        paper_id = str(metadata.get("id", "")).strip()
+        if paper_id and paper_id not in weekly_by_id:
+            weekly_by_id[paper_id] = metadata
+
+    discovery_entries = sorted(
+        [m for m in weekly_by_id.values() if str(m.get("source", "")).strip() != "scholar_alerts"],
+        key=lambda item: (
+            _metadata_sort_date(item.get("published") or item.get("date")),
+            str(item.get("title", "")),
+        ),
+        reverse=True,
+    )
+    scholar_entries = sorted(
+        [m for m in weekly_by_id.values() if str(m.get("source", "")).strip() == "scholar_alerts"],
+        key=lambda item: (
+            _metadata_sort_date(item.get("published") or item.get("date")),
+            str(item.get("title", "")),
+        ),
+        reverse=True,
+    )
+
+    all_entries = [*discovery_entries, *scholar_entries]
+    topic_counts = _collect_weekly_topic_counts(all_entries)
+    category_counts = _collect_weekly_category_counts(all_entries)
+    author_counts = _collect_weekly_author_counts(all_entries)
+    highlights = _select_weekly_highlights(discovery_entries, scholar_entries)
+
+    total = len(discovery_entries) + len(scholar_entries)
+    lines: list[str] = [
+        f"# Weekly digest — {week_start.isoformat()} to {week_end.isoformat()}",
+        "",
+        "## Summary",
+        "",
+        f"- Total papers: {total}",
+        f"- Daily Precision: {len(discovery_entries)}",
+        f"- Scholar Inbox: {len(scholar_entries)}",
+        f"- Top topics: {', '.join(topic_counts) if topic_counts else 'None'}",
+        f"- Top categories: {_format_counter(category_counts, 5)}",
+        f"- Frequent authors: {_format_counter(author_counts, 5)}",
+        f"- Highlights: {'; '.join(str(entry.get('title', 'Untitled')) for entry, _reasons in highlights) if highlights else 'None'}",
+        "",
+        _weekly_summary_sentence(topic_counts, category_counts),
+        "",
+        "---",
+        "",
+        "## Highlights",
+        "",
+    ]
+    for entry, reasons in highlights:
+        title = str(entry.get("title", "Untitled"))
+        entry_day = _metadata_date(entry.get("date")) or "Unknown date"
+        link = str(entry.get("link", "")).strip()
+        note_path = str(entry.get("note_path", "")).strip()
+        note_label = Path(note_path).name if note_path else ""
+        note_href = _weekly_note_href(note_path, paper_dir, weekly_dir) if note_path else ""
+        lines.append(f"### {title} ({entry_day})")
+        lines.append("")
+        if reasons:
+            lines.append(f"- **Why highlighted**: {'; '.join(reasons)}")
+        if link:
+            lines.append(f"- **Link**: {link}")
+        if note_label and note_href:
+            lines.append(f"- **Local note**: [{note_label}]({note_href})")
+        lines.append("")
+
+    lines.extend(
+        [
+            "---",
+            "",
+        "## Daily Precision",
+        "",
+        f"Papers: {len(discovery_entries)}",
+        "",
+        ]
+    )
+    _append_weekly_entries(
+        lines,
+        discovery_entries,
+        paper_dir=paper_dir,
+        digest_dir=weekly_dir,
+        include_why=True,
+    )
+    lines.append("---")
+    lines.append("")
+    lines.append("## Scholar Inbox")
+    lines.append("")
+    lines.append(f"Papers: {len(scholar_entries)}")
+    lines.append("")
+    _append_weekly_entries(
+        lines,
+        scholar_entries,
+        paper_dir=paper_dir,
+        digest_dir=weekly_dir,
+        include_why=False,
+    )
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def write_daily_digest(
