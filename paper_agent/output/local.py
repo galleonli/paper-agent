@@ -5,9 +5,10 @@ daily/YYYY-MM-DD.md listing papers with arXiv link and local note path.
 """
 
 import json
+import re
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from paper_agent.core.models import Paper
 from paper_agent.core.utils import safe_paper_id_for_path
@@ -43,6 +44,7 @@ def _paper_metadata(
         "why_this_paper": why,
         "categories": paper.categories or [],
         "note_path": f"library/{run_date.isoformat()}/{note_name}.md",
+        "related_local_papers": [],
     }
     if research_summary is not None:
         heading, body_text = research_summary
@@ -133,6 +135,196 @@ def write_local_note(
         encoding="utf-8",
     )
     return path
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9.+_-]*")
+_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "our",
+    "that",
+    "the",
+    "their",
+    "this",
+    "to",
+    "we",
+    "with",
+}
+
+
+def _iter_library_metadata_paths(library_dir: str | Path) -> list[Path]:
+    base = Path(library_dir)
+    if not base.exists():
+        return []
+    dated_dirs = [p for p in base.iterdir() if p.is_dir()]
+    paths: list[Path] = []
+    for day_dir in sorted(dated_dirs, key=lambda p: p.name, reverse=True):
+        paths.extend(sorted(day_dir.glob("*.json"), key=lambda p: p.name))
+    return paths
+
+
+def _read_metadata(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _tokenize_text(*parts: str) -> set[str]:
+    tokens: set[str] = set()
+    for part in parts:
+        for token in _TOKEN_RE.findall((part or "").lower()):
+            if len(token) >= 3 and token not in _STOPWORDS:
+                tokens.add(token)
+    return tokens
+
+
+def _normalized_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [str(v).strip() for v in values if str(v).strip()]
+
+
+def _normalized_display_map(values: Any) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for value in _normalized_list(values):
+        key = value.lower()
+        if key not in result:
+            result[key] = value
+    return result
+
+
+def _metadata_date(value: Any) -> str:
+    text = str(value or "").strip()
+    return text[:10] if len(text) >= 10 else text
+
+
+def _metadata_sort_date(value: Any) -> tuple[int, str]:
+    text = _metadata_date(value)
+    if not text or text in {"—", "-", "unknown", "Unknown", "n/a", "N/A"}:
+        return (0, "")
+    return (1, text)
+
+
+def _build_related_entry(candidate: dict[str, Any], reasons: list[str]) -> dict[str, Any]:
+    return {
+        "id": str(candidate.get("id", "")),
+        "title": str(candidate.get("title", "Untitled")),
+        "date": _metadata_date(candidate.get("date")),
+        "note_path": str(candidate.get("note_path", "")),
+        "link": str(candidate.get("link", "")),
+        "reasons": reasons,
+    }
+
+
+def _score_related_candidate(target: dict[str, Any], candidate: dict[str, Any]) -> tuple[float, list[str]]:
+    target_authors = _normalized_display_map(target.get("authors"))
+    candidate_authors = _normalized_display_map(candidate.get("authors"))
+    shared_author_keys = sorted(target_authors.keys() & candidate_authors.keys())
+    shared_authors = [target_authors[k] for k in shared_author_keys]
+
+    target_categories = _normalized_display_map(target.get("categories"))
+    candidate_categories = _normalized_display_map(candidate.get("categories"))
+    shared_category_keys = sorted(target_categories.keys() & candidate_categories.keys())
+    shared_categories = [target_categories[k] for k in shared_category_keys]
+
+    target_tokens = _tokenize_text(
+        str(target.get("title", "")),
+        str(target.get("abstract", "")),
+        str(target.get("why_this_paper", "")),
+    )
+    candidate_tokens = _tokenize_text(
+        str(candidate.get("title", "")),
+        str(candidate.get("abstract", "")),
+        str(candidate.get("why_this_paper", "")),
+    )
+    shared_tokens = sorted(target_tokens & candidate_tokens)
+
+    score = 0.0
+    reasons: list[str] = []
+
+    if shared_authors:
+        score += min(len(shared_authors), 2) * 4.0
+        author_label = "same author" if len(shared_authors) == 1 else "same authors"
+        reasons.append(f"{author_label}: {', '.join(shared_authors[:2])}")
+    if shared_categories:
+        score += min(len(shared_categories), 2) * 2.5
+        reasons.append(f"same arXiv categories: {', '.join(shared_categories[:2])}")
+    if shared_tokens:
+        score += min(len(shared_tokens), 4) * 1.25
+        reasons.append(f"similar topics: {', '.join(shared_tokens[:4])}")
+    if str(target.get("source", "")).strip() and target.get("source") == candidate.get("source"):
+        score += 0.25
+        source = str(target.get("source", "")).strip()
+        source_label = "Scholar Inbox" if source == "scholar_alerts" else "arXiv" if source == "arxiv" else source
+        reasons.append(f"same source: {source_label}")
+
+    return score, reasons
+
+
+def enrich_related_local_papers(
+    library_dir: str | Path,
+    target_metadata_paths: list[str | Path],
+    *,
+    max_related: int = 3,
+) -> None:
+    all_metadata_by_id: dict[str, dict[str, Any]] = {}
+    for metadata_path in _iter_library_metadata_paths(library_dir):
+        metadata = _read_metadata(metadata_path)
+        if metadata is None:
+            continue
+        paper_id = str(metadata.get("id", "")).strip()
+        if paper_id and paper_id not in all_metadata_by_id:
+            all_metadata_by_id[paper_id] = metadata
+
+    for target_path_raw in target_metadata_paths:
+        target_path = Path(target_path_raw)
+        target = _read_metadata(target_path)
+        if target is None:
+            continue
+
+        target_id = str(target.get("id", "")).strip()
+        candidates: list[tuple[float, dict[str, Any], list[str]]] = []
+        for candidate_id, candidate in all_metadata_by_id.items():
+            if not candidate_id or candidate_id == target_id:
+                continue
+            score, reasons = _score_related_candidate(target, candidate)
+            if score <= 0:
+                continue
+            candidates.append((score, candidate, reasons))
+
+        candidates.sort(
+            key=lambda item: (
+                item[0],
+                _metadata_sort_date(item[1].get("published") or item[1].get("date")),
+                str(item[1].get("title", "")),
+            ),
+            reverse=True,
+        )
+        target["related_local_papers"] = [
+            _build_related_entry(candidate, reasons)
+            for score, candidate, reasons in candidates[:max_related]
+        ]
+        target_path.write_text(
+            json.dumps(target, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
 
 def write_daily_digest(

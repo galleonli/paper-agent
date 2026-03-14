@@ -8,6 +8,10 @@ const READ_AFTER_MS = 5000;
 
 type SubtitleMode = "authors" | "date-and-authors";
 
+function shortenTitle(title: string, maxLength = 56): string {
+  return title.length > maxLength ? `${title.slice(0, maxLength - 1)}…` : title;
+}
+
 type PaperListViewProps = {
   papers: Paper[];
   emptyTitle: string;
@@ -120,6 +124,27 @@ function PaperActions(props: {
     <ActionPanel>
       {paper.link && <Action.OpenInBrowser url={paper.link} title="Open Paper" />}
       {paper.hasNote && <Action.Open title="Open Local Note" target={paper.notePath} />}
+      {paper.relatedLocalPapers && paper.relatedLocalPapers.length > 0 && (
+        <ActionPanel.Section title="Related Papers">
+          {paper.relatedLocalPapers.map((related) =>
+            related.hasNote && related.notePath ? (
+              <Action.Open
+                key={`related-note-${paper.id}-${related.id}`}
+                title={`Open Related Note: ${shortenTitle(related.title)}`}
+                target={related.notePath}
+                icon={Icon.Document}
+              />
+            ) : related.link ? (
+              <Action.OpenInBrowser
+                key={`related-link-${paper.id}-${related.id}`}
+                title={`Open Related Paper: ${shortenTitle(related.title)}`}
+                url={related.link}
+                icon={Icon.Link}
+              />
+            ) : null,
+          )}
+        </ActionPanel.Section>
+      )}
       <Action
         title={isRead ? "Mark as Unread" : "Mark as Read"}
         icon={isRead ? Icon.Circle : Icon.CheckCircle}

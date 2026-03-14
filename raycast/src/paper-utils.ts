@@ -6,6 +6,16 @@ export type ResearchSummary = {
   body?: string;
 };
 
+export type RelatedLocalPaper = {
+  id: string;
+  title: string;
+  date?: string;
+  notePath?: string;
+  hasNote?: boolean;
+  link?: string;
+  reasons?: string[];
+};
+
 export type Paper = {
   id: string;
   title: string;
@@ -16,6 +26,7 @@ export type Paper = {
   whyThisPaper?: string;
   categories?: string[];
   researchSummary?: ResearchSummary;
+  relatedLocalPapers?: RelatedLocalPaper[];
   link?: string;
   notePath: string;
   hasNote: boolean;
@@ -50,6 +61,7 @@ export function parseCliPapers(rawJson: string, options: ParseOptions): Paper[] 
         ? path.join(options.paperDir, rawNotePath)
         : path.join(options.libraryDir, date || options.fallbackDate, `${id || "note"}.md`);
       const rs = e.research_summary as Record<string, unknown> | undefined;
+      const related = Array.isArray(e.related_local_papers) ? e.related_local_papers : [];
 
       return {
         id: id || path.basename(notePath, ".md"),
@@ -63,6 +75,20 @@ export function parseCliPapers(rawJson: string, options: ParseOptions): Paper[] 
         researchSummary: rs
           ? { heading: rs.heading as string, body: rs.body as string }
           : undefined,
+        relatedLocalPapers: related
+          .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+          .map((item) => {
+            const rawRelatedNotePath = item.note_path as string | undefined;
+            return {
+              id: (item.id as string) ?? "",
+              title: (item.title as string) ?? "Untitled",
+              date: item.date as string | undefined,
+              notePath: rawRelatedNotePath ? path.join(options.paperDir, rawRelatedNotePath) : undefined,
+              hasNote: rawRelatedNotePath ? fs.existsSync(path.join(options.paperDir, rawRelatedNotePath)) : false,
+              link: item.link as string | undefined,
+              reasons: Array.isArray(item.reasons) ? (item.reasons as string[]) : [],
+            } satisfies RelatedLocalPaper;
+          }),
         link: e.link as string | undefined,
         notePath,
         hasNote: fs.existsSync(notePath),
@@ -71,6 +97,16 @@ export function parseCliPapers(rawJson: string, options: ParseOptions): Paper[] 
 }
 
 export function renderPaperDetailMarkdown(paper: Paper, displayDate: string): string {
+  const relatedSection =
+    paper.relatedLocalPapers && paper.relatedLocalPapers.length > 0
+      ? `\n---\n\n## Related local papers\n\n${paper.relatedLocalPapers
+          .map((item) => {
+            const reasonText =
+              item.reasons && item.reasons.length > 0 ? `\n  - ${item.reasons.join("\n  - ")}` : "";
+            return `- **${item.title}**${item.date ? ` (${item.date})` : ""}${reasonText}`;
+          })
+          .join("\n")}`
+      : "";
   return `# ${paper.title}
 
 ${paper.authors?.length ? `**Authors:** ${paper.authors.join(", ")}\n\n` : ""}${paper.categories?.length ? `**Categories:** ${paper.categories.join(", ")}\n\n` : ""}**Date:** ${displayDate}
@@ -84,6 +120,7 @@ ${paper.whyThisPaper ?? "N/A"}
 ---
 
 ${paper.abstract ?? "No abstract available."}
+${relatedSection}
 ${paper.researchSummary?.body ? `
 
 ---

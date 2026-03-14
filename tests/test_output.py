@@ -6,7 +6,12 @@ from pathlib import Path
 
 from paper_agent.filter_papers import RankedPaper
 from paper_agent.models import Paper
-from paper_agent.output.local import write_local_note, write_daily_digest
+from paper_agent.output.local import (
+    _score_related_candidate,
+    enrich_related_local_papers,
+    write_daily_digest,
+    write_local_note,
+)
 
 
 def _ranked(
@@ -145,3 +150,228 @@ def test_write_local_note_scholar_json_metadata(tmp_path: Path) -> None:
     assert metadata["why_this_paper"] == "From your Scholar Inbox."
     assert "summary" not in metadata
     assert "research_summary" not in metadata
+
+
+def test_enrich_related_local_papers_scans_entire_library(tmp_path: Path) -> None:
+    """Related-paper enrichment scans library across dates, not just the current day."""
+    old = RankedPaper(
+        paper=Paper(
+            id="2401.00001",
+            title="Continual Learning with Replay Buffers",
+            summary="Replay methods for continual learning with memory buffers.",
+            authors=["Alice Smith"],
+            categories=["cs.LG"],
+            updated="2024-01-10T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2401.00001",
+            link_pdf=None,
+        ),
+        why_this_paper="Matched continual learning keyword.",
+    )
+    new = RankedPaper(
+        paper=Paper(
+            id="2402.00002",
+            title="Memory Replay for Continual Learning Systems",
+            summary="A replay-based continual learning method with adaptive memory.",
+            authors=["Alice Smith", "Bob"],
+            categories=["cs.LG"],
+            updated="2024-02-11T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2402.00002",
+            link_pdf=None,
+        ),
+        why_this_paper="Matched replay keyword.",
+    )
+    unrelated = RankedPaper(
+        paper=Paper(
+            id="2402.99999",
+            title="Protein Folding with Diffusion",
+            summary="Diffusion models for proteins.",
+            authors=["Carol"],
+            categories=["q-bio.BM"],
+            updated="2024-02-12T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2402.99999",
+            link_pdf=None,
+        ),
+        why_this_paper="Matched biology keyword.",
+    )
+
+    write_local_note(old, tmp_path, date(2024, 1, 10), source="arxiv")
+    target_path = write_local_note(new, tmp_path, date(2024, 2, 11), source="arxiv")
+    write_local_note(unrelated, tmp_path, date(2024, 2, 11), source="arxiv")
+
+    enrich_related_local_papers(tmp_path, [target_path.with_suffix(".json")], max_related=3)
+
+    metadata = json.loads(target_path.with_suffix(".json").read_text(encoding="utf-8"))
+    related = metadata["related_local_papers"]
+    assert related
+    assert related[0]["id"] == "2401.00001"
+    assert related[0]["date"] == "2024-01-10"
+    assert "score" not in related[0]
+    assert any("same author" in reason for reason in related[0]["reasons"])
+    assert any("same arXiv categories" in reason for reason in related[0]["reasons"])
+    assert all(item["id"] != "2402.00002" for item in related)
+
+
+def test_related_category_reason_matches_scoring_cap() -> None:
+    """Displayed shared categories should match the number that contributes to score."""
+    target = {
+        "authors": [],
+        "categories": ["cs.AI", "cs.CL", "cs.LG"],
+        "title": "",
+        "abstract": "",
+        "why_this_paper": "",
+        "source": "arxiv",
+    }
+    candidate = {
+        "authors": [],
+        "categories": ["cs.AI", "cs.CL", "cs.LG"],
+        "title": "",
+        "abstract": "",
+        "why_this_paper": "",
+        "source": "arxiv",
+    }
+
+    score, reasons = _score_related_candidate(target, candidate)
+
+    assert score == 5.25
+    assert "same arXiv categories: cs.AI, cs.CL" in reasons
+    assert all("cs.LG" not in reason for reason in reasons)
+
+
+def test_related_reasons_use_human_friendly_labels() -> None:
+    """Reasons should read naturally and include the source bonus explanation."""
+    target = {
+        "authors": ["Alice Smith"],
+        "categories": ["cs.LG"],
+        "title": "Replay for Continual Learning",
+        "abstract": "Adaptive replay buffers for lifelong learning.",
+        "why_this_paper": "Matched replay keyword.",
+        "source": "scholar_alerts",
+    }
+    candidate = {
+        "authors": ["Alice Smith"],
+        "categories": ["cs.LG"],
+        "title": "Continual Learning with Replay Buffers",
+        "abstract": "Replay buffers for continual learning.",
+        "why_this_paper": "Matched continual learning keyword.",
+        "source": "scholar_alerts",
+    }
+
+    score, reasons = _score_related_candidate(target, candidate)
+
+    assert score > 0
+    assert "same author: Alice Smith" in reasons
+    assert "same arXiv categories: cs.LG" in reasons
+    assert any(reason.startswith("similar topics: ") for reason in reasons)
+    assert "same source: Scholar Inbox" in reasons
+
+
+def test_enrich_related_local_papers_keeps_newest_duplicate_id(tmp_path: Path) -> None:
+    """When a paper id exists on multiple dates, keep the newest metadata entry."""
+    target = RankedPaper(
+        paper=Paper(
+            id="2403.00003",
+            title="Replay Methods for Continual Learning",
+            summary="Replay methods in continual learning systems.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="2024-03-15T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2403.00003",
+            link_pdf=None,
+        ),
+        why_this_paper="Matched replay keyword.",
+    )
+    older = RankedPaper(
+        paper=Paper(
+            id="2401.11111",
+            title="Older Replay Paper",
+            summary="Replay methods with memory.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="2024-01-10T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2401.11111",
+            link_pdf=None,
+        ),
+        why_this_paper="Older version.",
+    )
+    newer = RankedPaper(
+        paper=Paper(
+            id="2401.11111",
+            title="Newer Replay Paper",
+            summary="Replay methods with adaptive memory.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="2024-02-10T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2401.11111v2",
+            link_pdf=None,
+        ),
+        why_this_paper="Newer version.",
+    )
+
+    write_local_note(older, tmp_path, date(2024, 1, 10), source="arxiv")
+    write_local_note(newer, tmp_path, date(2024, 2, 10), source="arxiv")
+    target_path = write_local_note(target, tmp_path, date(2024, 3, 15), source="arxiv")
+
+    enrich_related_local_papers(tmp_path, [target_path.with_suffix(".json")], max_related=3)
+
+    metadata = json.loads(target_path.with_suffix(".json").read_text(encoding="utf-8"))
+    related = metadata["related_local_papers"]
+    assert related
+    assert related[0]["id"] == "2401.11111"
+    assert related[0]["title"] == "Newer Replay Paper"
+    assert related[0]["date"] == "2024-02-10"
+    assert related[0]["link"] == "https://arxiv.org/abs/2401.11111v2"
+
+
+def test_enrich_related_local_papers_sorts_unknown_dates_last(tmp_path: Path) -> None:
+    """Unknown published dates should not outrank valid recent dates."""
+    target = RankedPaper(
+        paper=Paper(
+            id="2403.00003",
+            title="Replay Methods for Continual Learning",
+            summary="Replay methods in continual learning systems.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="2024-03-15T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2403.00003",
+            link_pdf=None,
+        ),
+        why_this_paper="Matched replay keyword.",
+    )
+    unknown_date = RankedPaper(
+        paper=Paper(
+            id="2401.11111",
+            title="Replay Paper With Unknown Date",
+            summary="Replay methods with memory.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="",
+            link_abs="https://arxiv.org/abs/2401.11111",
+            link_pdf=None,
+        ),
+        why_this_paper="Older version.",
+    )
+    known_date = RankedPaper(
+        paper=Paper(
+            id="2402.22222",
+            title="Replay Paper With Known Date",
+            summary="Replay methods with adaptive memory.",
+            authors=["Dana"],
+            categories=["cs.LG"],
+            updated="2024-02-10T00:00:00Z",
+            link_abs="https://arxiv.org/abs/2402.22222",
+            link_pdf=None,
+        ),
+        why_this_paper="Newer version.",
+    )
+
+    write_local_note(unknown_date, tmp_path, date(2024, 1, 10), source="arxiv")
+    write_local_note(known_date, tmp_path, date(2024, 2, 10), source="arxiv")
+    target_path = write_local_note(target, tmp_path, date(2024, 3, 15), source="arxiv")
+
+    enrich_related_local_papers(tmp_path, [target_path.with_suffix(".json")], max_related=3)
+
+    metadata = json.loads(target_path.with_suffix(".json").read_text(encoding="utf-8"))
+    related = metadata["related_local_papers"]
+    assert related
+    assert related[0]["id"] == "2402.22222"
+    assert related[1]["id"] == "2401.11111"

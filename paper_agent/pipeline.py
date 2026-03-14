@@ -14,7 +14,11 @@ from paper_agent.core.state import filter_unseen, save_seen
 from paper_agent.core.summarize import build_research_summary
 from paper_agent.filter_papers import RankedPaper, count_after_category, filter_and_rank
 from paper_agent.policy.base import ScoredPaper
-from paper_agent.output.local import write_daily_digest, write_local_note
+from paper_agent.output.local import (
+    enrich_related_local_papers,
+    write_daily_digest,
+    write_local_note,
+)
 from paper_agent.export import write_bibtex, write_ris
 from paper_agent.sources import fetch_arxiv
 from paper_agent.sources import scholar_alerts_source
@@ -221,6 +225,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         )
 
     discovery_note_paths: list[str] = []
+    new_metadata_paths: list[Path] = []
     for r in ranked_unseen:
         # Optional LLM-generated research-focused summary (language-controlled).
         research_summary = build_research_summary(r.paper, r.why_this_paper, config)
@@ -233,6 +238,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             source="arxiv",
         )
         discovery_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
+        new_metadata_paths.append(note_path.with_suffix(".json"))
 
     # Export discovery papers to BibTeX/RIS when configured (library_dir/YYYY-MM-DD/{id}.bib, .ris).
     for r in ranked_unseen:
@@ -253,6 +259,10 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             source="scholar_alerts",
         )
         scholar_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
+        new_metadata_paths.append(note_path.with_suffix(".json"))
+
+    if new_metadata_paths:
+        enrich_related_local_papers(delivery.library_dir, new_metadata_paths)
 
     digest_path = write_daily_digest(
         ranked_unseen,
