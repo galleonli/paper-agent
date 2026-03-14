@@ -70,6 +70,8 @@ declare namespace Preferences {
   export type SearchPapers = ExtensionPreferences & {}
   /** Preferences accessible in the `favorite-papers` command */
   export type FavoritePapers = ExtensionPreferences & {}
+  /** Preferences accessible in the `reading-queue` command */
+  export type ReadingQueue = ExtensionPreferences & {}
   /** Preferences accessible in the `run-pipeline` command */
   export type RunPipeline = ExtensionPreferences & {}
   /** Preferences accessible in the `install-daily-schedule` command */
@@ -91,6 +93,8 @@ declare namespace Arguments {
   export type SearchPapers = {}
   /** Arguments passed to the `favorite-papers` command */
   export type FavoritePapers = {}
+  /** Arguments passed to the `reading-queue` command */
+  export type ReadingQueue = {}
   /** Arguments passed to the `run-pipeline` command */
   export type RunPipeline = {}
   /** Arguments passed to the `install-daily-schedule` command */

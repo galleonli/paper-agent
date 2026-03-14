@@ -258,6 +258,13 @@
       "mode": "view"
     },
     {
+      "name": "reading-queue",
+      "title": "Reading Queue",
+      "subtitle": "Browse queued papers",
+      "description": "Open papers you have added to your reading queue from the Paper Agent extension.",
+      "mode": "view"
+    },
+    {
       "name": "run-pipeline",
       "title": "Run Paper Agent",
       "subtitle": "Run the full pipeline once",
