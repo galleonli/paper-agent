@@ -72,6 +72,12 @@ declare namespace Preferences {
   export type FavoritePapers = ExtensionPreferences & {}
   /** Preferences accessible in the `run-pipeline` command */
   export type RunPipeline = ExtensionPreferences & {}
+  /** Preferences accessible in the `install-daily-schedule` command */
+  export type InstallDailySchedule = ExtensionPreferences & {}
+  /** Preferences accessible in the `remove-daily-schedule` command */
+  export type RemoveDailySchedule = ExtensionPreferences & {}
+  /** Preferences accessible in the `daily-schedule-status` command */
+  export type DailyScheduleStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `open-paper-repo` command */
   export type OpenPaperRepo = ExtensionPreferences & {}
 }
@@ -87,6 +93,12 @@ declare namespace Arguments {
   export type FavoritePapers = {}
   /** Arguments passed to the `run-pipeline` command */
   export type RunPipeline = {}
+  /** Arguments passed to the `install-daily-schedule` command */
+  export type InstallDailySchedule = {}
+  /** Arguments passed to the `remove-daily-schedule` command */
+  export type RemoveDailySchedule = {}
+  /** Arguments passed to the `daily-schedule-status` command */
+  export type DailyScheduleStatus = {}
   /** Arguments passed to the `open-paper-repo` command */
   export type OpenPaperRepo = {}
 }

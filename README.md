@@ -60,14 +60,29 @@ OpenAI summarization is optional. For CLI/cron, set `OPENAI_API_KEY` in your env
 
 ### Run daily (automatic)
 
-Run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
+You can run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
 
 ```bash
 CRON_TZ=Europe/Berlin
 0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
 ```
 
-Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed. More options: [Scheduling](#scheduling).
+Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed.
+
+On macOS, the Raycast extension also includes **Install Daily Schedule**, which installs a `launchd` job that:
+
+- runs the same shared runner script every day at **04:00**
+- runs once after boot/login if the Mac was off at 04:00 and the day has not succeeded yet
+- skips duplicate runs after a successful run on the same day
+- writes schedule artifacts under `~/Library/Application Support/PaperAgent/`
+- writes launch logs under `~/Library/Logs/PaperAgent/`
+
+The extension also includes:
+
+- **Remove Daily Schedule** to uninstall the `launchd` job in one step while keeping logs and status history
+- **Daily Schedule Status** to check whether the schedule is installed and whether today's scheduled run succeeded, failed, or was skipped
+
+Re-run **Install Daily Schedule** after changing Raycast Preferences that affect the pipeline, because the scheduled job refreshes its runtime config and secrets from the current preferences at install time. More options: [Scheduling](#scheduling).
 
 ---
 
@@ -254,6 +269,9 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 | Command             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, and sources from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done or on failure.                                                                                                                                                                                                                                                                                                                                                                                |
+| **Install Daily Schedule** | Installs or updates a macOS `launchd` job for **04:00** local time. The job uses the same shared runner script as **Run Paper Agent**, catches up after boot/login when 04:00 was missed, and writes logs under `~/Library/Logs/PaperAgent/`. Re-run it after changing scheduling-related preferences.                                                                                                                                                                                                 |
+| **Remove Daily Schedule** | Unloads and removes the macOS `launchd` job for the daily run. It keeps the log and state directories so you can still inspect previous runs.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Daily Schedule Status** | Shows whether the `launchd` job is installed, today's schedule result, the last successful day, and the most recent run metadata with quick actions to open the log or state directory.                                                                                                                                                                                                                                                                                                                                                      |
 | **Today Papers**    | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), open local note (when a matching `.md` exists), mark read/unread, add/remove favorites, and open the favorites list. Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`.                                                                      |
 | **Recent Papers**   | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. Supports the same read/unread and favorites actions as Today Papers.                                                                                                                                                                                                                                                                                                                       |
 | **Search Papers**   | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). Supports the same read/unread and favorites actions as Today Papers. |

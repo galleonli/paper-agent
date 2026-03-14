@@ -265,6 +265,27 @@
       "mode": "view"
     },
     {
+      "name": "install-daily-schedule",
+      "title": "Install Daily Schedule",
+      "subtitle": "Install 04:00 launchd job",
+      "description": "Installs or updates a macOS launchd job that runs Paper Agent daily at 04:00 and catches up after boot/login if missed.",
+      "mode": "no-view"
+    },
+    {
+      "name": "remove-daily-schedule",
+      "title": "Remove Daily Schedule",
+      "subtitle": "Uninstall 04:00 launchd job",
+      "description": "Unloads and removes the macOS launchd job for the daily Paper Agent run while keeping logs and status history.",
+      "mode": "no-view"
+    },
+    {
+      "name": "daily-schedule-status",
+      "title": "Daily Schedule Status",
+      "subtitle": "Check today's scheduled run",
+      "description": "Shows whether the daily 04:00 launchd job is installed and whether today's scheduled run succeeded, failed, or was skipped.",
+      "mode": "view"
+    },
+    {
       "name": "open-paper-repo",
       "title": "Open Paper Repo",
       "subtitle": "Open paper directory in Finder",
