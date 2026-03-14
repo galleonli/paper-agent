@@ -60,6 +60,7 @@ fi
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
 LOCK_DIR="${STATE_DIR}/run.lock"
+LOCK_PID_FILE="${LOCK_DIR}/pid"
 LAST_SUCCESS_FILE="${STATE_DIR}/last_success_date"
 STATUS_FILE="${STATE_DIR}/last_run_status.json"
 TODAY="$(date +%F)"
@@ -84,26 +85,104 @@ send_notification() {
     "$message" >/dev/null 2>&1 || true
 }
 
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf "%s" "$value"
+}
+
 write_status() {
-  local status="$1"
+  local run_status="$1"
   local reason="${2:-}"
   local exit_code="${3:-}"
   local finished_at
   finished_at="$(date '+%Y-%m-%d %H:%M:%S')"
+  local mode_json date_json status_json reason_json exit_json started_json finished_json log_json config_json root_json
+  mode_json="$(json_escape "$MODE")"
+  date_json="$(json_escape "$TODAY")"
+  status_json="$(json_escape "$run_status")"
+  reason_json="$(json_escape "$reason")"
+  exit_json="$(json_escape "$exit_code")"
+  started_json="$(json_escape "$STARTED_AT")"
+  finished_json="$(json_escape "$finished_at")"
+  log_json="$(json_escape "$RUN_LOG")"
+  config_json="$(json_escape "$CONFIG_PATH")"
+  root_json="$(json_escape "$AGENT_ROOT")"
   cat > "$STATUS_FILE" <<EOF
 {
-  "mode": "${MODE}",
-  "date": "${TODAY}",
-  "status": "${status}",
-  "reason": "${reason}",
-  "exit_code": "${exit_code}",
-  "started_at": "${STARTED_AT}",
-  "finished_at": "${finished_at}",
-  "log_path": "${RUN_LOG}",
-  "config_path": "${CONFIG_PATH}",
-  "agent_root": "${AGENT_ROOT}"
+  "mode": "${mode_json}",
+  "date": "${date_json}",
+  "status": "${status_json}",
+  "reason": "${reason_json}",
+  "exit_code": "${exit_json}",
+  "started_at": "${started_json}",
+  "finished_at": "${finished_json}",
+  "log_path": "${log_json}",
+  "config_path": "${config_json}",
+  "agent_root": "${root_json}"
 }
 EOF
+}
+
+clear_lock_dir() {
+  rm -f "$LOCK_PID_FILE" 2>/dev/null || true
+  rmdir "$LOCK_DIR" 2>/dev/null
+}
+
+is_active_lock_pid() {
+  local lock_pid="$1"
+  if [[ -z "$lock_pid" ]]; then
+    return 1
+  fi
+
+  local lock_state=""
+  lock_state="$(ps -o state= -p "$lock_pid" 2>/dev/null | tr -d '[:space:]')"
+  if [[ -n "$lock_state" && "$lock_state" == Z* ]]; then
+    return 1
+  fi
+
+  if ! kill -0 "$lock_pid" 2>/dev/null; then
+    return 1
+  fi
+
+  local lock_cmd=""
+  lock_cmd="$(ps -o command= -p "$lock_pid" 2>/dev/null)"
+  if [[ "$lock_cmd" == *"run_paper_agent.sh"* ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$$" > "$LOCK_PID_FILE"
+    return 0
+  fi
+
+  local lock_pid=""
+  if [[ -f "$LOCK_PID_FILE" ]]; then
+    lock_pid="$(<"$LOCK_PID_FILE")"
+  fi
+
+  if is_active_lock_pid "$lock_pid"; then
+    return 1
+  fi
+
+  if ! clear_lock_dir; then
+    return 1
+  fi
+
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$$" > "$LOCK_PID_FILE"
+    return 0
+  fi
+
+  return 1
 }
 
 if [[ "$MODE" == "daily-launchd" ]]; then
@@ -124,14 +203,14 @@ if [[ "$MODE" == "daily-launchd" ]]; then
   fi
 fi
 
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+if ! acquire_lock; then
   echo "Skipping run because another Paper Agent process is active."
   write_status "skipped" "already-running" "0"
   exit 0
 fi
 
 cleanup() {
-  rmdir "$LOCK_DIR" 2>/dev/null || true
+  clear_lock_dir || true
 }
 trap cleanup EXIT INT TERM
 
@@ -156,17 +235,17 @@ cd "$AGENT_ROOT" || {
 }
 
 "$PYTHON_BIN" -m paper_agent run --config "$CONFIG_PATH" 2>&1 | tee -a "$RUN_LOG"
-status=${pipestatus[1]}
+run_exit_code=${pipestatus[1]}
 
-if [[ $status -eq 0 ]]; then
+if [[ $run_exit_code -eq 0 ]]; then
   echo "$TODAY" > "$LAST_SUCCESS_FILE"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] completed successfully" | tee -a "$RUN_LOG"
-  write_status "success" "" "$status"
+  write_status "success" "" "$run_exit_code"
   send_notification "Paper Agent finished" "Daily run completed successfully. Log: ${RUN_LOG}"
 else
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] failed with exit code $status" | tee -a "$RUN_LOG" >&2
-  write_status "failed" "pipeline-exit-nonzero" "$status"
-  send_notification "Paper Agent failed" "Daily run failed with exit code ${status}. Check log: ${RUN_LOG}"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] failed with exit code $run_exit_code" | tee -a "$RUN_LOG" >&2
+  write_status "failed" "pipeline-exit-nonzero" "$run_exit_code"
+  send_notification "Paper Agent failed" "Daily run failed with exit code ${run_exit_code}. Check log: ${RUN_LOG}"
 fi
 
-exit $status
+exit $run_exit_code

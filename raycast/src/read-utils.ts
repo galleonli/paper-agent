@@ -1,5 +1,5 @@
 import { LocalStorage } from "@raycast/api";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Paper } from "./paper-utils";
 
 const READ_STORAGE_KEY = "read-papers";
@@ -44,10 +44,13 @@ async function writeReadPapers(records: ReadPaperRecord[]): Promise<void> {
 export function useReadPapers() {
   const [readRecords, setReadRecords] = useState<ReadPaperRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const readRecordsRef = useRef<ReadPaperRecord[]>([]);
+  const readWriteRef = useRef<Promise<void>>(Promise.resolve());
 
   const reloadReadPapers = useCallback(async () => {
     setIsLoading(true);
     const next = await readReadPapers();
+    readRecordsRef.current = next;
     setReadRecords(next);
     setIsLoading(false);
   }, []);
@@ -60,30 +63,37 @@ export function useReadPapers() {
 
   const isRead = useCallback((paper: Paper) => readKeys.has(getPaperStateKey(paper)), [readKeys]);
 
-  const markAsRead = useCallback(
-    async (paper: Paper) => {
-      const key = getPaperStateKey(paper);
-      const next = [
-        ...readRecords.filter((record) => record.key !== key),
-        {
-          key,
-          readAt: new Date().toISOString(),
-        },
-      ];
-      await writeReadPapers(next);
+  const updateReadRecords = useCallback(async (updater: (current: ReadPaperRecord[]) => ReadPaperRecord[]) => {
+    const nextWrite = readWriteRef.current.then(async () => {
+      const next = updater(readRecordsRef.current);
+      readRecordsRef.current = next;
       setReadRecords(next);
-    },
-    [readRecords],
-  );
+      await writeReadPapers(next);
+    });
+    readWriteRef.current = nextWrite.catch(() => undefined);
+    await nextWrite;
+  }, []);
 
   const markAsUnread = useCallback(
     async (paper: Paper) => {
       const key = getPaperStateKey(paper);
-      const next = readRecords.filter((record) => record.key !== key);
-      await writeReadPapers(next);
-      setReadRecords(next);
+      await updateReadRecords((current) => current.filter((record) => record.key !== key));
     },
-    [readRecords],
+    [updateReadRecords],
+  );
+
+  const markAsRead = useCallback(
+    async (paper: Paper) => {
+      const key = getPaperStateKey(paper);
+      await updateReadRecords((current) => [
+        ...current.filter((record) => record.key !== key),
+        {
+          key,
+          readAt: new Date().toISOString(),
+        },
+      ]);
+    },
+    [updateReadRecords],
   );
 
   return {

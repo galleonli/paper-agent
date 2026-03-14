@@ -4,6 +4,19 @@ import { buildRunEnv, parseProcessedCount, prepareRun, runViaRunner } from "./ru
 
 const prefs = getPreferenceValues<Preferences.RunPipeline>();
 
+function parseSkipMessage(output: string): string | undefined {
+  if (output.includes("Skipping run because another Paper Agent process is active.")) {
+    return "Another Paper Agent run is already active.";
+  }
+  if (output.includes("Skipping daily run before")) {
+    return "Skipped because the daily schedule has not reached its run hour yet.";
+  }
+  if (output.includes("Skipping daily run because today's run already succeeded.")) {
+    return "Skipped because today's scheduled run already succeeded.";
+  }
+  return undefined;
+}
+
 function RunPipelineView() {
   useEffect(() => {
     let cancelled = false;
@@ -22,6 +35,15 @@ function RunPipelineView() {
         if (cancelled) return;
         if (!cancelled) {
           if (success) {
+            const skipMessage = parseSkipMessage([stdout ?? "", stderr ?? ""].join("\n"));
+            if (skipMessage) {
+              await showToast({
+                style: Toast.Style.Failure,
+                title: "Paper Agent skipped",
+                message: skipMessage,
+              });
+              return;
+            }
             const count = parseProcessedCount(stdout ?? "");
             const message = count !== undefined ? `${count} new paper(s)` : undefined;
             await showToast({ style: Toast.Style.Success, title: "Paper Agent finished", message });
