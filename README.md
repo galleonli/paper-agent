@@ -5,9 +5,9 @@
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
 _Discover relevant arXiv papers with explainable, interest-aware selection (instead of raw keyword matching).
-Keep Google Scholar Alert emails in a separate inbox, then write local notes, daily digests, and BibTeX/RIS exports._
+Keep Google Scholar Alert emails in a separate inbox, then write local notes, daily and weekly digests, related-paper links, and BibTeX/RIS exports._
 
-[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Configuration**](#configuration-user-settings-first) · [**Google Scholar setup**](#google-scholar-setup) · [**Raycast extension**](#raycast-extension) · [**Troubleshooting**](#troubleshooting)
+[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Configuration**](#configuration-user-settings-first) · [**Google Scholar setup**](#google-scholar-setup) · [**Advanced tuning**](#advanced-tuning-legacy-compatibility) · [**Raycast extension**](#raycast-extension) · [**Troubleshooting**](#troubleshooting)
 
 <br/>
 
@@ -26,8 +26,11 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 
 - **Daily Precision (arXiv):** Explainable filtering and ranking with required keywords (`OR` match in title or abstract), exclude keywords, and seed support.
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
+- **Weekly review layer:** Generate weekly digests with top topics, top categories, frequent authors, highlighted papers, and an auto-written summary sentence.
+- **Related local papers:** Backfill note metadata with explainable local-paper links, then surface them in Raycast detail panes and action panels.
+- **Raycast workflow:** Browse today, recent, search, favorites, reading queue, run the pipeline, install/remove daily schedule, inspect schedule status, and open the paper repo.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
-- **Workflow-friendly outputs:** Generate local notes, daily digests, and BibTeX/RIS exports.
+- **Workflow-friendly outputs:** Generate local notes, daily/weekly digests, and BibTeX/RIS exports.
 
 ---
 
@@ -44,6 +47,12 @@ python -m paper_agent run --config config.yaml
 ```
 
 Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, set direction/delivery/summarize/sources in extension Preferences; for CLI/cron, add those sections to config or use defaults.
+
+Useful next links:
+
+- Need Gmail / Google Scholar email ingestion? Start with [Google Scholar setup](#google-scholar-setup).
+- Want the Raycast workflow and scheduled runs? Jump to [Raycast extension](#raycast-extension).
+- Curious about legacy `policy.*` or `autotune.*` knobs in `config.yaml`? Read [Advanced tuning (legacy compatibility)](#advanced-tuning-legacy-compatibility) before changing them.
 
 First run writes notes, digest, and exports; second run with same state prints no new papers.
 
@@ -89,11 +98,16 @@ Re-run **Install Daily Schedule** after changing Raycast Preferences that affect
 
 ## Google Scholar setup
 
-The Scholar Inbox reads **Google Scholar Alert emails** from one of three providers:
+The Scholar Inbox reads **Google Scholar Alert emails** only. No RSS, no crawling, and no Google Scholar scraping.
+
+Core config supports four provider values:
 
 - **`mbox`:** one local mbox file.
 - **`eml_dir`:** a directory containing `.eml` files.
-- **`imap`:** Gmail IMAP inbox (or label/folder).
+- **`imap`:** generic IMAP mailbox (commonly Gmail IMAP).
+- **`gmail`:** Gmail-flavored IMAP alias; same mailbox flow, with Gmail label support.
+
+If you run from **Raycast**, the extension currently supports IMAP/Gmail credentials, but not local-path providers such as `mbox` or `eml_dir`.
 
 Minimal config:
 
@@ -101,23 +115,86 @@ Minimal config:
 sources:
   scholar_alerts:
     enabled: true
+    mode: email
     email:
-      provider: imap # mbox | eml_dir | imap
+      provider: imap # mbox | eml_dir | imap | gmail
 ```
 
 Next steps by provider:
 
 - **mbox:** set `email.mbox_path`.
 - **eml_dir:** set `email.eml_dir`.
-- **imap (Gmail):** set `email.imap_host`, `email.imap_user`, `email.imap_password_env` (default env var name: `IMAP_PASSWORD`), and optional `email.gmail_label`.
+- **imap / gmail:** set `email.imap_host`, `email.imap_user`, `email.imap_password_env` (default env var name: `IMAP_PASSWORD`), and optional `email.gmail_label`.
+
+### Gmail IMAP (recommended for automation)
+
+Recommended setup:
+
+1. Use a dedicated Gmail account or label for Scholar Alerts.
+2. Enable 2-Step Verification on the Google account.
+3. Generate a Google App Password for the workflow.
+4. Export the password into your shell environment instead of committing it to YAML.
+5. Point `email.imap_password_env` to that variable.
+
+Example:
+
+```bash
+export IMAP_PASSWORD='your-16-char-app-password'
+python -m paper_agent run --config config.yaml
+```
+
+Suggested config block:
+
+```yaml
+sources:
+  scholar_alerts:
+    enabled: true
+    mode: email
+    max_items_per_run: 200
+    ordering: arrival
+    email:
+      provider: imap
+      imap_host: imap.gmail.com
+      imap_user: your_scholar_inbox@gmail.com
+      imap_password_env: IMAP_PASSWORD
+      gmail_label: scholar-alerts
+      from_addresses:
+        - scholaralerts-noreply@google.com
+```
+
+Key fields:
+
+| Field | Meaning |
+| ----- | ------- |
+| `email.provider` | One of `mbox`, `eml_dir`, `imap`, `gmail`. |
+| `email.imap_host` | IMAP host such as `imap.gmail.com`. |
+| `email.imap_user` | Mailbox login, usually your email address. |
+| `email.imap_password_env` | Environment variable containing the app password (for example `IMAP_PASSWORD`). |
+| `email.gmail_label` | Optional Gmail label/folder. If selection fails, the implementation falls back to `INBOX`. |
+| `max_items_per_run` | Cap on Scholar items processed per run. |
+| `ordering` | Must be `arrival` for the current email-ingestion implementation. |
+| `light_filter.*` | Scholar-only include/exclude keyword filters. |
 
 Recommended:
 
-- For automation: prefer **`imap`** with a dedicated Gmail inbox/label.
+- For automation: prefer **`imap`** or **`gmail`** with a dedicated Gmail inbox/label.
 - For local or offline testing: prefer **`mbox`** or **`eml_dir`**.
 - Set `email.from_addresses` (for example `["scholaralerts-noreply@google.com"]`) to reduce noise.
 - Keep `sources.scholar_alerts.max_items_per_run` at a reasonable cap for each run.
-- Follow the full Gmail IMAP guide in [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md).
+
+Runtime semantics:
+
+- Scholar Inbox does **not** count toward `direction.max_papers_per_day`.
+- Scholar Inbox does **not** use bandit / exploration / diversity policy logic.
+- Scholar Inbox is ordered by **arrival time** only.
+- Scholar Inbox uses only `sources.scholar_alerts.light_filter.*` for filtering.
+
+Verification checklist:
+
+1. Run `python -m paper_agent run --config config.yaml`.
+2. Confirm `daily/YYYY-MM-DD.md` has a **Scholar Inbox** section.
+3. Check `logs/latest.log` for `scholar_provider=...` and `scholar_new=N`.
+4. Confirm `library/YYYY-MM-DD/` contains Scholar notes when new alert emails exist.
 
 ---
 
@@ -131,9 +208,13 @@ Main knobs in config and/or Raycast:
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Direction, delivery, summarize, sources** | **Raycast:** set in extension Preferences when using Run Paper Agent. **CLI/cron:** add `direction`, `delivery`, `summarize`, `sources` to `config.yaml` or rely on app defaults.                                                                                                                                                                           |
 | **Interests**                               | `interests.seeds` in config                                                                                                                                                                                                                                                                                                                                 |
-| **Discovery ranking / selection**           | Current discovery flow uses required-keyword tiers: title keyword match > abstract keyword match > seed match. Final picks still go through `selection.*` (`max_papers_per_day`, `explore_ratio`, `topic_cap`, `min_topics`). `policy.type: "off"` is the intended/default setting; legacy policy knobs remain in config mainly for backward compatibility. |
+| **Selection**                               | `selection.explore_ratio`, `selection.topic_cap`, `selection.min_topics` in config                                                                                                                                                                                                                                                                          |
+| **Feedback**                                | `feedback.blocked_phrases`, `feedback.blocked_authors`, `feedback.boosted_phrases` in config. These are legacy/compatibility fields and are not part of the default `policy.type: "off"` pipeline path.                                                                                                                                                     |
+| **Discovery ranking / policy**              | Current discovery flow uses required-keyword tiers: title keyword match > abstract keyword match > seed match. Final picks still go through `selection.*`. `policy.type: "off"` is the intended/default setting. Legacy `policy.type: "deterministic"` / `"linucb"` still validate in config for backward compatibility, but the current main pipeline does not activate those legacy policies. |
+| **AutoTune**                                | `autotune.*` remains in config for backward compatibility and experiments. It is **not active in the current main pipeline path**, which logs `autotune_enabled=False`.                                                                                                                                                                                       |
 | **Export**                                  | `export.formats` (e.g. `["bibtex", "ris"]`) in config                                                                                                                                                                                                                                                                                                       |
 | **Advanced fetch limit**                    | `advanced.max_results_per_query` in config. Default: `9999`. This is a per-run fetch cap for arXiv discovery, not an infinite mode. In code it is validated as `Field(default=9999, ge=1, le=9999)`, meaning: use `9999` if omitted, and only allow values from `1` to `9999`.                                                                              |
+| **Prompt overrides**                        | `prompts.research_summary_template` in config when you want to customize the optional research-summary prompt.                                                                                                                                                                                                                                              |
 
 All dates (paths, digest filename, run date, lookback) use **system local time** only; no timezone config. For cron, set `CRON_TZ` if you want the job to run at a specific wall-clock time.
 If you enable OpenAI-based research summaries, provide an API key either via `OPENAI_API_KEY` (CLI/cron) or the Raycast **OpenAI API Key** preference (extension run).
@@ -157,14 +238,39 @@ If you want to customize the research-summary prompt, leave the built-in default
 
 ---
 
+## Advanced tuning (legacy compatibility)
+
+This section replaces the old standalone tuning guide.
+
+Current behavior summary:
+
+- The active/default discovery path is effectively `policy.type: "off"`.
+- Candidate ranking is based on required-keyword tiering: title keyword match > abstract keyword match > seed match.
+- Final picks still go through `selection.*` (`explore_ratio`, `topic_cap`, `min_topics`).
+- Legacy `policy.*`, `feedback.*`, and `autotune.*` fields remain in config for compatibility and experimentation, but the current main pipeline does **not** instantiate the legacy deterministic / LinUCB policies.
+
+For most users:
+
+- Tune `direction.*`, `selection.*`, `interests.seeds`, and optional prompt overrides.
+- Leave `policy.type: "off"`.
+- Leave `autotune.enabled: false`.
+
+Keep in mind:
+
+- `direction.lookback_days` affects both arXiv discovery and Scholar Inbox ingestion.
+- `direction.max_papers_per_day` applies to discovery only; Scholar Inbox is bounded by `sources.scholar_alerts.max_items_per_run`.
+- You may still see autotune-related fields in logs and config because they remain part of the compatibility surface, but they are not active in the default pipeline.
+
+---
+
 ## Output artifacts
 
 | Artifact                 | Path                                                         | Contents                                                                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Notes**                | `library/YYYY-MM-DD/{id}.md`                                 | Title, ID, published, authors, link, categories, source, abstract, why-this-paper, and key points. Discovery notes may include an optional `Research-focused summary`; Scholar notes stay light and may use placeholders when abstract is missing. |
-| **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json`                               | Machine-readable mirror of each note (id, title, authors, link, abstract, why_this_paper, optional research_summary, etc.) for scripts and `today` / `list --json`.                                                                                |
+| **Note metadata (JSON)** | `library/YYYY-MM-DD/{id}.json`                               | Machine-readable mirror of each note (id, title, authors, link, abstract, why_this_paper, optional research_summary, `related_local_papers`, etc.) for scripts and `today` / `list --json`.                                                       |
 | **Digest**               | `daily/YYYY-MM-DD.md`                                        | Two sections: **Daily Precision** (capped) and **Scholar Inbox** (capped by `max_items_per_run`). Each entry links to `library/YYYY-MM-DD/{id}.md`.                                                                                                |
-| **Weekly digest**        | `daily/weekly/YYYY-MM-DD_to_YYYY-MM-DD.md`                   | Week-to-date rollup for the current local week. Rebuilds from `library/*/*.json`, groups entries by day, and keeps separate **Daily Precision** and **Scholar Inbox** sections with links back to local notes.                                     |
+| **Weekly digest**        | `daily/weekly/YYYY-MM-DD_to_YYYY-MM-DD.md`                   | Week-to-date rollup for the current local week. Rebuilds from `library/*/*.json`, summarizes total papers, top topics, top categories, frequent authors, highlighted papers, and an auto summary sentence, then groups entries by day with links back to local notes. |
 | **Log**                  | `logs/latest.log`                                            | One line per run with fetch/filter/selection summary fields such as `fetched_total`, `after_category`, `after_filters`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_provider`, plus selection / autotune diagnostics.   |
 | **Exports**              | `library/YYYY-MM-DD/{id}.bib`, `library/YYYY-MM-DD/{id}.ris` | BibTeX and RIS for **discovery** papers only (when in `export.formats`).                                                                                                                                                                           |
 
@@ -213,12 +319,12 @@ Papers: 3
 
 ### Scholar Inbox (email alerts)
 
-- Ingest **Google Scholar Alert emails** only (mbox, `.eml` directory, or Gmail IMAP). No RSS and no Google Scholar crawling.
+- Ingest **Google Scholar Alert emails** only (mbox, `.eml` directory, IMAP, or Gmail-flavored IMAP). No RSS and no Google Scholar crawling.
 - **Not** capped by `max_papers_per_day`; bounded only by `sources.scholar_alerts.max_items_per_run`.
 - **Never** uses bandit or exploration/diversity constraints; **arrival-ordered** (received time, descending); **light filtering** only (`sources.scholar_alerts.light_filter.*`).
 - **Abstract enrichment:** If the alert link is arXiv, the agent fetches the full abstract (and authors, categories, PDF link) from the arXiv API. For other links it may try to fetch title and abstract from the page (best-effort); if that fails or is not possible, it keeps the email snippet. Enrichment never blocks: you always get at least the snippet.
 - Scholar notes do not include the optional LLM `Research-focused summary` section.
-- Setup and provider details: see [Google Scholar setup](#google-scholar-setup) and [GOOGLE_SCHOLAR_GMAIL_SETUP.md](GOOGLE_SCHOLAR_GMAIL_SETUP.md).
+- Setup and provider details: see [Google Scholar setup](#google-scholar-setup).
 
 ---
 
@@ -230,7 +336,7 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 ## Raycast extension
 
-A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, and open the paper repo from a Paper Agent workflow.
+A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, inspect related local papers, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper repo from a Paper Agent workflow.
 
 **Status:** Early MVP. The API and behavior may change between versions.
 
@@ -270,21 +376,29 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 
 | Command             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, and sources from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done or on failure.                                                                                                                                                                                                                                                                                                                                                                                |
+| **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, and sources from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done, skipped, or failed.                                                                                                                                                                                                                                                                                                                                                                           |
+| **Open Paper Repo** | Opens the configured paper directory in Finder. Useful for jumping directly to `library/`, `daily/`, and exported files.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Install Daily Schedule** | Installs or updates a macOS `launchd` job for **04:00** local time. The job uses the same shared runner script as **Run Paper Agent**, catches up after boot/login when 04:00 was missed, and writes logs under `~/Library/Logs/PaperAgent/`. Re-run it after changing scheduling-related preferences.                                                                                                                                                                                                 |
 | **Remove Daily Schedule** | Unloads and removes the macOS `launchd` job for the daily run. It keeps the log and state directories so you can still inspect previous runs.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Daily Schedule Status** | Shows whether the `launchd` job is installed, today's schedule result, the last successful day, and the most recent run metadata with quick actions to open the log or state directory.                                                                                                                                                                                                                                                                                                                                                      |
-| **Today Papers**    | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), open local note (when a matching `.md` exists), mark read/unread, add/remove favorites, and open the favorites list. Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`.                                                                      |
-| **Recent Papers**   | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. Supports the same read/unread and favorites actions as Today Papers.                                                                                                                                                                                                                                                                                                                       |
-| **Search Papers**   | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). Supports the same read/unread and favorites actions as Today Papers. |
-| **Favorite Papers** | Shows papers you manually added to favorites from any list view. Favorites are stored locally in Raycast and can be removed directly from this list. Read/unread state is also shown here.                                                                                                                                                                                                                                                                                                                                                                           |
+| **Today Papers**    | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title, authors, categories, abstract, "Why this paper", optional research summary, and any related local papers. Actions: Open paper, open local note, open related notes or related links, mark read/unread, add/remove favorites, add/remove reading queue, and jump to favorites or queue. Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`.                                     |
+| **Recent Papers**   | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. Supports the same related-paper, read/unread, favorites, and reading-queue actions as Today Papers.                                                                                                                                                                                                                                                                                    |
+| **Search Papers**   | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). Supports the same related-paper, read/unread, favorites, and reading-queue actions as Today Papers. |
+| **Favorite Papers** | Shows papers you manually added to favorites from any list view. Favorites are stored locally in Raycast and can be removed directly from this list. Read/unread state and reading-queue state are also shown here.                                                                                                                                                                                                                                                                                                                                              |
+| **Reading Queue**   | Shows papers you manually queued from any list view. The queue is stored locally in Raycast, keeps newest queued items first, and supports the same open/read/favorite actions as the other list views.                                                                                                                                                                                                                                                                                                                                                            |
 
 #### Read/unread behavior
 
 - Each paper is shown with a local read/unread marker in Raycast.
 - A paper is marked as **read** after it stays selected in the detail view for at least 5 seconds.
 - You can also manually switch a paper between **Mark as Read** and **Mark as Unread** from the action panel.
-- Read/unread state and favorites are stored locally in Raycast and do not modify your Paper Agent library JSON files.
+- Read/unread state, favorites, and reading queue are stored locally in Raycast and do not modify your Paper Agent library JSON files.
+
+#### Related local papers
+
+- If a note metadata JSON contains `related_local_papers`, Raycast shows them in the detail pane under **Related local papers**.
+- The action panel adds a **Related Papers** section when any related item has a local note or external link.
+- Related-paper links are generated from your full local library and are meant as lightweight, explainable navigation help rather than embedding-based semantic search.
 
 ### Development (Raycast)
 
@@ -314,9 +428,9 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 ### Scholar Inbox
 
 - **No Scholar items?**
-  - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, or `imap`.
+  - **Enabled and provider:** `sources.scholar_alerts.enabled: true` and `sources.scholar_alerts.email.provider` set to `mbox`, `eml_dir`, `imap`, or `gmail`.
   - **mbox/eml_dir:** Set `sources.scholar_alerts.email.mbox_path` or `sources.scholar_alerts.email.eml_dir`; ensure messages exist and are within `direction.lookback_days`.
-- **IMAP:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; for CLI/cron put the password in the environment (e.g. `IMAP_PASSWORD`), while Raycast can also pass it from the **Scholar IMAP password** preference. If `sources.scholar_alerts.email.gmail_label` is configured and supported by the current implementation, the agent attempts to read from that label; otherwise it reads from `INBOX`.
+- **IMAP / Gmail:** Set `sources.scholar_alerts.email.imap_host`, `sources.scholar_alerts.email.imap_user`, and `sources.scholar_alerts.email.imap_password_env`; for CLI/cron put the password in the environment (e.g. `IMAP_PASSWORD`), while Raycast can also pass it from the **Scholar IMAP password** preference. If `sources.scholar_alerts.email.gmail_label` is configured and supported by the current implementation, the agent attempts to read from that label; otherwise it reads from `INBOX`.
   - Check `logs/latest.log` for `scholar_provider` and `scholar_new` to confirm the source and count.
 
 - **IMAP login works but no papers are extracted?**  
@@ -337,7 +451,7 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 ## Safety & ethics
 
 - **arXiv:** Use the official API only; respect terms and rate limits.
-- **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (mbox, .eml directory, or Gmail IMAP) is ingested.
+- **Google Scholar:** **Inbox (email) only.** We do not crawl or scrape Google Scholar. Only user-provided email (`mbox`, `.eml` directory, IMAP, or Gmail-flavored IMAP) is ingested.
 - **Privacy:** Config, state, and outputs stay on your machine; no required external DB or hosted service.
 
 ---
