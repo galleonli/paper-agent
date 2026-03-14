@@ -74,6 +74,7 @@ On macOS, the Raycast extension also includes **Install Daily Schedule**, which 
 - runs the same shared runner script every day at **04:00**
 - runs once after boot/login if the Mac was off at 04:00 and the day has not succeeded yet
 - skips duplicate runs after a successful run on the same day
+- sends a macOS notification when the scheduled run succeeds or fails
 - writes schedule artifacts under `~/Library/Application Support/PaperAgent/`
 - writes launch logs under `~/Library/Logs/PaperAgent/`
 

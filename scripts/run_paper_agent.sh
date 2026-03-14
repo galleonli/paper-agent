@@ -67,6 +67,23 @@ CURRENT_HOUR="$(date +%H)"
 STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 RUN_LOG=""
 
+send_notification() {
+  local title="$1"
+  local message="$2"
+  if [[ "$MODE" != "daily-launchd" ]]; then
+    return
+  fi
+  if [[ ! -x /usr/bin/osascript ]]; then
+    return
+  fi
+  /usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"' \
+    -e 'end run' \
+    "$title" \
+    "$message" >/dev/null 2>&1 || true
+}
+
 write_status() {
   local status="$1"
   local reason="${2:-}"
@@ -145,9 +162,11 @@ if [[ $status -eq 0 ]]; then
   echo "$TODAY" > "$LAST_SUCCESS_FILE"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] completed successfully" | tee -a "$RUN_LOG"
   write_status "success" "" "$status"
+  send_notification "Paper Agent finished" "Daily run completed successfully. Log: ${RUN_LOG}"
 else
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] failed with exit code $status" | tee -a "$RUN_LOG" >&2
   write_status "failed" "pipeline-exit-nonzero" "$status"
+  send_notification "Paper Agent failed" "Daily run failed with exit code ${status}. Check log: ${RUN_LOG}"
 fi
 
 exit $status
