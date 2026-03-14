@@ -2,16 +2,13 @@ import { LocalStorage } from "@raycast/api";
 import * as fs from "node:fs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Paper } from "./paper-utils";
+import { getPaperStateKey } from "./read-utils";
 
 const FAVORITES_STORAGE_KEY = "favorite-papers";
 
 export type FavoritePaper = Paper & {
   favoritedAt: string;
 };
-
-function getFavoriteKey(paper: Pick<Paper, "id" | "date">): string {
-  return `${paper.date}::${paper.id}`;
-}
 
 function normalizePaper(paper: Paper): Paper {
   return {
@@ -68,14 +65,14 @@ export function useFavoritePapers() {
     void reloadFavorites();
   }, [reloadFavorites]);
 
-  const favoriteKeys = useMemo(() => new Set(favorites.map((paper) => getFavoriteKey(paper))), [favorites]);
+  const favoriteKeys = useMemo(() => new Set(favorites.map((paper) => getPaperStateKey(paper))), [favorites]);
 
-  const isFavorite = useCallback((paper: Paper) => favoriteKeys.has(getFavoriteKey(paper)), [favoriteKeys]);
+  const isFavorite = useCallback((paper: Paper) => favoriteKeys.has(getPaperStateKey(paper)), [favoriteKeys]);
 
   const addFavorite = useCallback(
     async (paper: Paper) => {
       const next = sortFavorites([
-        ...favorites.filter((entry) => getFavoriteKey(entry) !== getFavoriteKey(paper)),
+        ...favorites.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper)),
         {
           ...normalizePaper(paper),
           favoritedAt: new Date().toISOString(),
@@ -89,7 +86,7 @@ export function useFavoritePapers() {
 
   const removeFavorite = useCallback(
     async (paper: Paper) => {
-      const next = favorites.filter((entry) => getFavoriteKey(entry) !== getFavoriteKey(paper));
+      const next = favorites.filter((entry) => getPaperStateKey(entry) !== getPaperStateKey(paper));
       await writeFavorites(next);
       setFavorites(next);
     },
