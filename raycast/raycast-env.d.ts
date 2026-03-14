@@ -68,6 +68,8 @@ declare namespace Preferences {
   export type RecentPapers = ExtensionPreferences & {}
   /** Preferences accessible in the `search-papers` command */
   export type SearchPapers = ExtensionPreferences & {}
+  /** Preferences accessible in the `favorite-papers` command */
+  export type FavoritePapers = ExtensionPreferences & {}
   /** Preferences accessible in the `run-pipeline` command */
   export type RunPipeline = ExtensionPreferences & {}
   /** Preferences accessible in the `open-paper-repo` command */
@@ -81,6 +83,8 @@ declare namespace Arguments {
   export type RecentPapers = {}
   /** Arguments passed to the `search-papers` command */
   export type SearchPapers = {}
+  /** Arguments passed to the `favorite-papers` command */
+  export type FavoritePapers = {}
   /** Arguments passed to the `run-pipeline` command */
   export type RunPipeline = {}
   /** Arguments passed to the `open-paper-repo` command */

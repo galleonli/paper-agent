@@ -1,9 +1,10 @@
-import { ActionPanel, List, Action, getPreferenceValues } from "@raycast/api";
+import { List, getPreferenceValues } from "@raycast/api";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { useMemo, useState } from "react";
 import { withEffectiveConfigPath } from "./config-utils";
-import { type Paper, parseCliPapers, renderPaperDetailMarkdown } from "./paper-utils";
+import { type Paper, parseCliPapers } from "./paper-utils";
+import { PaperListView } from "./paper-list";
 
 const prefs = getPreferenceValues<Preferences.SearchPapers>();
 const CONFIG_PATH = prefs.configPath?.trim() ?? "";
@@ -28,8 +29,8 @@ function loadSearchResults(query: string): Paper[] {
       execFileSync(
         PYTHON_BIN,
         ["-m", "paper_agent", "search", "--query", query, "--json", "--config", effectiveConfigPath],
-        { cwd: AGENT_ROOT, encoding: "utf-8" }
-      )
+        { cwd: AGENT_ROOT, encoding: "utf-8" },
+      ),
     );
   } catch {
     return [];
@@ -44,49 +45,31 @@ function loadSearchResults(query: string): Paper[] {
 
 export default function Command() {
   const [searchText, setSearchText] = useState("");
+  const papers = useMemo(() => (HAS_CONFIG && HAS_PAPER_DIR ? loadSearchResults(searchText) : []), [searchText]);
 
-  const papers = useMemo(() => loadSearchResults(searchText), [searchText]);
-
-  return (
-    <List
-      isShowingDetail
-      searchBarPlaceholder="Search by title, authors, abstract, date..."
-      onSearchTextChange={setSearchText}
-    >
-      {(!HAS_CONFIG || !HAS_PAPER_DIR) && (
+  if (!HAS_CONFIG || !HAS_PAPER_DIR) {
+    return (
+      <List
+        isShowingDetail
+        searchBarPlaceholder="Search by title, authors, abstract, date..."
+        onSearchTextChange={setSearchText}
+      >
         <List.EmptyView
           title="Set preferences first"
           description="Set both 'Config file path' and 'Paper directory' in extension preferences."
         />
-      )}
-      {HAS_CONFIG && HAS_PAPER_DIR && papers.length === 0 && (
-        <List.EmptyView
-          title="No papers or CLI failed"
-          description="Check: Config path = full path to config.yaml; Paper directory = paper repo root; .venv/bin/python3 has paper_agent; run the pipeline at least once."
-        />
-      )}
-      {HAS_CONFIG && HAS_PAPER_DIR &&
-        papers.map((paper) => (
-        <List.Item
-          key={`${paper.date}-${paper.id}`}
-          title={paper.title}
-          subtitle={[paper.date, paper.authors?.length ? paper.authors.join(", ") : undefined]
-            .filter(Boolean)
-            .join(" · ")}
-          detail={
-            <List.Item.Detail
-              markdown={renderPaperDetailMarkdown(paper, paper.date)}
-            />
-          }
-          actions={
-            <ActionPanel>
-              {paper.link && <Action.OpenInBrowser url={paper.link} title="Open Paper Link" />}
-              {paper.hasNote && (
-                <Action.Open title="Open Local Note" target={paper.notePath} />
-              )}
-            </ActionPanel>
-          }
-        />))}
-    </List>
+      </List>
+    );
+  }
+
+  return (
+    <PaperListView
+      papers={papers}
+      emptyTitle="No papers or CLI failed"
+      emptyDescription="Check: Config path = full path to config.yaml; Paper directory = paper repo root; .venv/bin/python3 has paper_agent; run the pipeline at least once."
+      subtitleMode="date-and-authors"
+      searchBarPlaceholder="Search by title, authors, abstract, date..."
+      onSearchTextChange={setSearchText}
+    />
   );
 }

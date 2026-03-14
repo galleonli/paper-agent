@@ -245,9 +245,10 @@ For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the
 | Command | Description |
 |--------|-------------|
 | **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, and sources from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done or on failure. |
-| **Today Papers** | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), Open local note (when a matching `.md` exists). Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`. |
+| **Today Papers** | Reads today's papers from the local library without invoking the Paper Agent CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title; authors and categories when present; full abstract; "Why this paper"; research summary when present. Actions: Open paper (browser), open local note (when a matching `.md` exists), add/remove favorites, and open the favorites list. Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`. |
 | **Recent Papers** | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. |
 | **Search Papers** | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `summary`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > summary/categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). |
+| **Favorite Papers** | Shows papers you manually added to favorites from any list view. Favorites are stored locally in Raycast and can be removed directly from this list. |
 
 ### Development (Raycast)
 

@@ -101,7 +101,10 @@
       "title": "Discovery policy",
       "description": "Off: select by required-keyword match only (title first, then abstract). No scoring policy.",
       "data": [
-        { "title": "Off", "value": "off" }
+        {
+          "title": "Off",
+          "value": "off"
+        }
       ],
       "default": "off"
     },
@@ -245,6 +248,13 @@
       "title": "Search Papers",
       "subtitle": "Search local Paper Agent library",
       "description": "Search papers in your local library by title, authors, summary, and more.",
+      "mode": "view"
+    },
+    {
+      "name": "favorite-papers",
+      "title": "Favorite Papers",
+      "subtitle": "Browse favorited papers",
+      "description": "Open papers you have added to favorites from the Paper Agent extension.",
       "mode": "view"
     },
     {
