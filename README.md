@@ -49,17 +49,23 @@ Details and setup: [Raycast extension](#raycast-extension).
 
 ## Quick start
 
+**First-time setup:** run `./scripts/bootstrap.sh` or the one-liner below (after cloning).
+
 ```bash
 git clone https://github.com/galleonli/paper-agent.git
 cd paper-agent
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp config.example.yaml config.yaml
-python -m paper_agent run --config config.yaml
+./scripts/bootstrap.sh
 ```
 
-Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, or install the macOS daily schedule from Raycast, treat extension **Preferences as the primary place** to set runtime fields such as direction, delivery, summarize, sources, and `policy.type`. Use `config.yaml` mainly for the sections Raycast does not override. For CLI/cron runs, add those runtime sections to config or rely on defaults.
+Or in one line (Unix/macOS):
+
+```bash
+git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./scripts/bootstrap.sh
+```
+
+On Windows (PowerShell), from the repo root: `.\scripts\bootstrap.ps1`
+
+Then run the pipeline once: `python -m paper_agent run --config config.yaml` (use `.venv/bin/python` or `.venv\Scripts\python.exe` if not activated). Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, or install the macOS daily schedule from Raycast, treat extension **Preferences as the primary place** to set runtime fields such as direction, delivery, summarize, sources, and `policy.type`. Use `config.yaml` mainly for the sections Raycast does not override. For CLI/cron runs, add those runtime sections to config or rely on defaults.
 
 Useful next links:
 
