@@ -383,7 +383,7 @@ def enrich_related_local_papers(
 def _weekly_note_href(note_path: str, paper_dir: str | Path, digest_dir: Path) -> str:
     if not note_path.strip():
         return ""
-    absolute_note = Path(paper_dir).parent / note_path
+    absolute_note = Path(paper_dir) / note_path
     return Path(os.path.relpath(absolute_note, start=digest_dir)).as_posix()
 
 
