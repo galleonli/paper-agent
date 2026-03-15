@@ -149,9 +149,9 @@ def test_write_weekly_digest_aggregates_full_week(tmp_path: Path) -> None:
     assert "- **Why highlighted**:" in text
     assert "## Daily Precision" in text
     assert "## Scholar Inbox" in text
-    assert "../../library/2025-01-06/m1.md" in text
-    assert "../../library/2025-01-08/scholar-wed.md" in text
-    assert "../../library/2025-01-12/sun1.md" in text
+    assert "../library/2025-01-06/m1.md" in text
+    assert "../library/2025-01-08/scholar-wed.md" in text
+    assert "../library/2025-01-12/sun1.md" in text
 
 
 def test_collect_weekly_topic_counts_filters_generic_tokens() -> None:
