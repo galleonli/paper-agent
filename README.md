@@ -20,6 +20,14 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 
 </div>
 
+> [!IMPORTANT]
+> **Repository references**
+> - **Paper Agent core repo (this project):** https://github.com/galleonli/paper-agent
+> - **Paper Agent Raycast extension repo:** https://github.com/galleonli/paper-agent-raycast
+>
+> Core setup, config, and pipeline behavior are documented in this README.
+> For Raycast commands, preferences, and extension-only troubleshooting, refer to the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
+
 ---
 
 ## Key features
