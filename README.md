@@ -421,7 +421,7 @@ If your issue is in CLI/cron runs, config parsing, Scholar ingestion, or output 
 - **Cron job does not run or runs at wrong time?**  
   Set `CRON_TZ` to your timezone (e.g. `CRON_TZ=Europe/Berlin`). Use the full path to the repo and to the venv Python in the cron line. Ensure the user running cron has read access to the repo and write access to `state_dir`, `library_dir`, `paper_dir`, and `logs_dir`.
 
-For Raycast-specific run/schedule issues (launchd install status, Core not found, Preferences wiring), see [paper-agent-raycast Troubleshooting](https://github.com/galleonli/paper-agent-raycast#troubleshooting).
+Again: For Raycast-specific run/schedule issues (launchd install status, Core not found, Preferences wiring), see [paper-agent-raycast Troubleshooting](https://github.com/galleonli/paper-agent-raycast#troubleshooting).
 
 ---
 
