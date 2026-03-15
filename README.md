@@ -28,7 +28,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 - **Scholar Inbox (email):** Ingest Google Scholar Alert emails from `mbox`, `.eml` directories, or Gmail IMAP into a separate inbox.
 - **Weekly review layer:** Generate weekly digests with top topics, top categories, frequent authors, highlighted papers, and an auto-written summary sentence.
 - **Related local papers:** Backfill note metadata with explainable local-paper links, then surface them in Raycast detail panes and action panels.
-- **Raycast workflow:** Browse today, recent, search, favorites, reading queue, run the pipeline, install/remove daily schedule, inspect schedule status, and open the paper repo.
+- **Raycast workflow:** Browse today, recent, search, favorites, reading queue, run the pipeline, install/remove daily schedule, inspect schedule status, and open the paper directory.
 - **Idempotent and catch-up safe:** Re-running the same window produces 0 duplicates; missed days can be recovered safely.
 - **Workflow-friendly outputs:** Generate local notes, daily/weekly digests, and optional BibTeX/RIS exports.
 
@@ -40,7 +40,7 @@ If you mainly use Raycast, these are the implemented commands:
 
 - **Run & automation:** `Run Paper Agent`, `Install Daily Schedule` (04:00 + catch-up), `Remove Daily Schedule`, `Daily Schedule Status`
 - **Browse & search:** `Today Papers`, `Recent Papers`, `Search Papers`
-- **Workflow:** `Favorite Papers`, `Reading Queue`, `Open Paper Repo`
+- **Workflow:** `Favorite Papers`, `Reading Queue`, `Open Paper Directory`
 - **In-list actions:** open paper/note, related-paper actions, mark read/unread, add/remove favorites, add/remove reading queue
 
 Details and setup: [Raycast extension](#raycast-extension).
@@ -112,21 +112,25 @@ Re-run **Install Daily Schedule** after changing Raycast Preferences that affect
 
 ## Raycast extension
 
-A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, inspect related local papers, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper repo from a Paper Agent workflow.
+A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, inspect related local papers, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper directory from a Paper Agent workflow.
+
+**The extension lives in a separate repository:** [paper-agent-raycast](https://github.com/galleonli/paper-agent-raycast) (or your fork). Install the **Paper Agent core** (this repo) first, then install the extension from the Raycast Store or from the extension repo.
 
 **Status:** Early MVP. The API and behavior may change between versions.
 
 ### Requirements
 
-- Raycast
-- A local Paper Agent library (JSON outputs under a date-based folder structure)
+- Raycast (macOS)
+- Paper Agent core installed (this repository), with a valid `config.yaml` and working Python environment
+- A local Paper Agent library (JSON outputs under a date-based folder structure) after you run the pipeline
 
 ### Getting started
 
-- Clone this repository.
-- In the `raycast/` directory, run `npm install`.
-- In Raycast, enable the Developer Tools (if not already enabled).
-- Run `npm run dev` from `raycast/` to load the extension in Raycast during development.
+1. **Install Paper Agent core** (this repo): clone, create venv, `pip install -r requirements.txt`, copy `config.example.yaml` to `config.yaml`, and configure it.
+2. **Install the Raycast extension** from the [Raycast Store](https://www.raycast.com/) or from the [extension repository](https://github.com/galleonli/paper-agent-raycast): clone that repo, run `npm install` and `npm run dev` to load it in Raycast during development.
+3. **Set extension Preferences**: **Config file path** (full path to your `config.yaml`), **Paper directory** (your `delivery.paper_dir`). Optionally set **Python executable** if you use a custom path.
+
+If the extension cannot find the core (missing config, wrong paths, or `paper_agent` not runnable), it shows **Core not found** with a link to this repo and a **Copy bootstrap command** action that copies a one-line install command to the clipboard.
 
 ### Configuration
 
@@ -156,7 +160,7 @@ The same preference-first behavior also applies to the macOS `launchd` job insta
 | Command             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, sources, and `policy.type` from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done, skipped, or failed.                                                                                                                                                                                                                                                                                                                                                          |
-| **Open Paper Repo** | Opens the configured paper directory in Finder. Useful for jumping directly to `library/`, daily digest files, and exported files.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Open Paper Directory** | Opens the configured paper directory in Finder. Useful for jumping directly to `library/`, daily digest files, and exported files.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Install Daily Schedule** | Installs or updates a macOS `launchd` job for **04:00** local time. The job uses the same shared runner script as **Run Paper Agent**, catches up after boot/login when 04:00 was missed, and writes logs under `~/Library/Logs/PaperAgent/`. Re-run it after changing scheduling-related preferences.                                                                                                                                                                                                 |
 | **Remove Daily Schedule** | Unloads and removes the macOS `launchd` job for the daily run. It keeps the log and state directories so you can still inspect previous runs.                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Daily Schedule Status** | Shows whether the `launchd` job is installed, today's schedule result, the last successful day, and the most recent run metadata with quick actions to open the log or state directory.                                                                                                                                                                                                                                                                                                                                                      |
@@ -181,8 +185,7 @@ The same preference-first behavior also applies to the macOS `launchd` job insta
 
 ### Development (Raycast)
 
-- **Build:** `npm run build` (from `raycast/`)
-- **Lint:** `npm run lint`
+From the [extension repository](https://github.com/galleonli/paper-agent-raycast): **Build:** `npm run build` · **Lint:** `npm run lint`
 
 ---
 
