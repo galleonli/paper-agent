@@ -51,6 +51,11 @@ Full command list and setup: [Raycast extension](#raycast-extension) below and t
 
 **First-time setup:** run `./scripts/bootstrap.sh` or the one-liner below (after cloning).
 
+> [!IMPORTANT]
+> **Background run (safe to close terminal):** use `nohup` (or cron/launchd) if you do not want to keep a terminal open.
+> Example: `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` (safe to close this terminal window).
+> If you run `python -m paper_agent run --config config.yaml` directly, it runs in the foreground until completion.
+
 ```bash
 git clone https://github.com/galleonli/paper-agent.git
 cd paper-agent
@@ -65,7 +70,7 @@ git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./sc
 
 On Windows (PowerShell), from the repo root: `.\scripts\bootstrap.ps1`
 
-Then run the pipeline once: `python -m paper_agent run --config config.yaml` (use `.venv/bin/python` or `.venv\Scripts\python.exe` if not activated). Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, or install the macOS daily schedule from Raycast, treat extension **Preferences as the primary place** to set runtime fields such as direction, delivery, summarize, sources, and `policy.type`. Use `config.yaml` mainly for the sections Raycast does not override. For CLI/cron runs, add those runtime sections to config or rely on defaults.
+Then run the pipeline once: `python -m paper_agent run --config config.yaml` (foreground mode; wait for completion), or `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` (background mode; safe to close this terminal window). Use `.venv/bin/python` or `.venv\Scripts\python.exe` if not activated. Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, or install the macOS daily schedule from Raycast, treat extension **Preferences as the primary place** to set runtime fields such as direction, delivery, summarize, sources, and `policy.type`. Use `config.yaml` mainly for the sections Raycast does not override. For CLI/cron runs, add those runtime sections to config or rely on defaults.
 
 Useful next links:
 
@@ -81,7 +86,8 @@ OpenAI summarization is optional. For CLI/cron, set `OPENAI_API_KEY` in your env
 
 | Command                                                              | Description                                                    |
 | -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `python -m paper_agent run --config config.yaml`                     | Run the full pipeline once.                                    |
+| `python -m paper_agent run --config config.yaml`                     | Run the full pipeline once (foreground; keep terminal open).   |
+| `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` | Run once in background (safe to close this terminal window). |
 | `python -m paper_agent today --json --config config.yaml`            | Print today's local paper entries as JSON.                     |
 | `python -m paper_agent list --json [--limit N] --config config.yaml` | Print recent local paper entries as JSON (optional `--limit`). |
 | `python -m paper_agent open <paper_id> --config config.yaml`         | Open the local Markdown note for the given paper id.           |
