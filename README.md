@@ -62,8 +62,7 @@ cd paper-agent
 ./scripts/bootstrap.sh
 ```
 
-One-liner (Unix/macOS): `git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./scripts/bootstrap.sh`  
-On Windows (PowerShell), from the repo root: `.\scripts\bootstrap.ps1`
+One-liner (Unix/macOS): `git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./scripts/bootstrap.sh`
 
 ### Path A: Raycast extension (primary)
 
@@ -185,7 +184,7 @@ If you prefer to run the pipeline from the command line (without the Raycast ext
 
 **Foreground (keep terminal open):** `python -m paper_agent run --config config.yaml`  
 **Background (safe to close terminal):** `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &`  
-Use `.venv/bin/python` or `.venv\Scripts\python.exe` if the venv is not activated.
+Use `.venv/bin/python` if the venv is not activated.
 
 | Command                                                              | Description                                                    |
 | -------------------------------------------------------------------- | -------------------------------------------------------------- |
