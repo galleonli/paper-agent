@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔥 Paper Agent
+<h1><img src="assets/extension-icon.png" width="40" height="40" alt="" style="vertical-align: middle;" /> Paper Agent</h1>
 
 **A self-hosted paper inbox for arXiv discovery and Google Scholar alerts.**
 
