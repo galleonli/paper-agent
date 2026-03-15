@@ -4,13 +4,25 @@ CLI entrypoint: python -m paper_agent run [--config path]
 
 import argparse
 import json
+import os
 import platform
 import re
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Iterable, List
+
+
+@dataclass
+class DiagnosticFinding:
+    severity: str
+    check_id: str
+    category: str
+    message: str
+    remediation: str
 
 
 def _load_config_delivery(config_path: Path) -> Any:
@@ -65,6 +77,393 @@ def _safe_string(value: Any) -> str:
     if isinstance(value, dict):
         return json.dumps(value, ensure_ascii=False)
     return str(value)
+
+
+def _path_is_writable(path: Path) -> bool:
+    """
+    Best-effort writability probe for existing directories.
+    Uses a temporary file to avoid false positives on ACL-restricted paths.
+    """
+    if not path.exists() or not path.is_dir():
+        return False
+    try:
+        with tempfile.NamedTemporaryFile(dir=path, prefix=".paper_agent_diag_", delete=True):
+            return True
+    except OSError:
+        return False
+
+
+def _run_diagnostics(config_path: Path) -> list[DiagnosticFinding]:
+    """Run comprehensive diagnostics checks without early exit."""
+    findings: list[DiagnosticFinding] = []
+
+    def add(
+        severity: str,
+        check_id: str,
+        category: str,
+        message: str,
+        remediation: str,
+    ) -> None:
+        findings.append(
+            DiagnosticFinding(
+                severity=severity,
+                check_id=check_id,
+                category=category,
+                message=message,
+                remediation=remediation,
+            )
+        )
+
+    # Runtime checks
+    py = sys.version_info
+    if (py.major, py.minor) < (3, 10):
+        add(
+            "ERROR",
+            "PYTHON_VERSION_TOO_LOW",
+            "runtime",
+            f"Detected Python {py.major}.{py.minor}; Paper Agent requires Python 3.10+.",
+            "Use Python 3.10+ and re-create the virtual environment.",
+        )
+    else:
+        add(
+            "INFO",
+            "PYTHON_VERSION_OK",
+            "runtime",
+            f"Python version is {py.major}.{py.minor}.",
+            "No action needed.",
+        )
+
+    for module_name in ("yaml", "pydantic", "requests"):
+        try:
+            __import__(module_name)
+            add(
+                "INFO",
+                f"DEPENDENCY_{module_name.upper()}_OK",
+                "runtime",
+                f"Dependency '{module_name}' is importable.",
+                "No action needed.",
+            )
+        except Exception:
+            add(
+                "ERROR",
+                f"DEPENDENCY_{module_name.upper()}_MISSING",
+                "runtime",
+                f"Dependency '{module_name}' cannot be imported.",
+                "Install project dependencies (for example: pip install -r requirements.txt).",
+            )
+
+    # Config checks
+    if not config_path.exists():
+        add(
+            "ERROR",
+            "CONFIG_FILE_MISSING",
+            "config",
+            f"Config file not found: {config_path}",
+            "Copy config.example.yaml to config.yaml (or pass --config with a valid path).",
+        )
+        add(
+            "WARN",
+            "CONFIG_DEPENDENT_CHECKS_SKIPPED",
+            "config",
+            "Config-dependent checks were skipped because config file is missing.",
+            "Create a valid config file and rerun diagnostics.",
+        )
+        add(
+            "WARN",
+            "DEVELOPER_MAINTENANCE_REMINDER",
+            "developer",
+            "Developer reminder: keep this diagnostics command updated when adding new failure modes.",
+            "When adding new features/sources, update diagnostics checks and tests in the same change.",
+        )
+        return findings
+
+    from paper_agent.core.config import load_config
+
+    config = None
+    try:
+        config = load_config(config_path)
+        add(
+            "INFO",
+            "CONFIG_VALID",
+            "config",
+            f"Config is valid: {config_path}",
+            "No action needed.",
+        )
+    except Exception as e:
+        add(
+            "ERROR",
+            "CONFIG_INVALID",
+            "config",
+            f"Config validation failed: {e}",
+            "Fix YAML/schema errors in config and rerun diagnostics.",
+        )
+        add(
+            "WARN",
+            "CONFIG_DEPENDENT_CHECKS_SKIPPED",
+            "config",
+            "Some checks were skipped because config is invalid.",
+            "Fix config validation errors to enable full diagnostics coverage.",
+        )
+
+    if config is not None:
+        # Delivery path checks
+        for key, raw in (
+            ("delivery.library_dir", config.delivery.library_dir),
+            ("delivery.paper_dir", config.delivery.paper_dir),
+            ("delivery.state_dir", config.delivery.state_dir),
+            ("delivery.logs_dir", config.delivery.logs_dir),
+        ):
+            p = Path(raw)
+            if p.exists() and not p.is_dir():
+                add(
+                    "ERROR",
+                    "DELIVERY_PATH_NOT_DIRECTORY",
+                    "filesystem",
+                    f"{key} points to a file, not a directory: {p}",
+                    f"Change {key} to a directory path in config.",
+                )
+                continue
+            if p.exists() and p.is_dir():
+                if _path_is_writable(p):
+                    add(
+                        "INFO",
+                        "DELIVERY_PATH_WRITABLE",
+                        "filesystem",
+                        f"{key} exists and is writable: {p}",
+                        "No action needed.",
+                    )
+                else:
+                    add(
+                        "ERROR",
+                        "DELIVERY_PATH_NOT_WRITABLE",
+                        "filesystem",
+                        f"{key} exists but is not writable: {p}",
+                        "Fix directory permissions so the current user can write to it.",
+                    )
+            else:
+                parent = p.parent if p.parent != Path("") else Path(".")
+                if parent.exists() and parent.is_dir() and _path_is_writable(parent):
+                    add(
+                        "WARN",
+                        "DELIVERY_PATH_MISSING",
+                        "filesystem",
+                        f"{key} does not exist yet: {p}",
+                        "This is usually fine. The run command creates directories automatically.",
+                    )
+                else:
+                    add(
+                        "ERROR",
+                        "DELIVERY_PARENT_NOT_WRITABLE",
+                        "filesystem",
+                        f"{key} does not exist and parent is not writable: {parent}",
+                        "Use a path under a writable directory or fix parent directory permissions.",
+                    )
+
+        # Summarization provider checks
+        if config.summarize.enabled:
+            provider = (config.summarize.provider or "").strip().lower()
+            if provider == "openai":
+                api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+                if api_key:
+                    add(
+                        "INFO",
+                        "OPENAI_API_KEY_PRESENT",
+                        "env",
+                        "OPENAI_API_KEY is set for OpenAI summarization.",
+                        "No action needed.",
+                    )
+                else:
+                    add(
+                        "WARN",
+                        "OPENAI_API_KEY_MISSING",
+                        "env",
+                        "Summarization is enabled but OPENAI_API_KEY is not set.",
+                        "Set OPENAI_API_KEY if you want LLM research summaries.",
+                    )
+            else:
+                add(
+                    "WARN",
+                    "SUMMARIZE_PROVIDER_UNRECOGNIZED",
+                    "config",
+                    f"Summarization provider is '{config.summarize.provider}'.",
+                    "Ensure the provider is supported by your summarization implementation.",
+                )
+
+        # arXiv query/category checks
+        if config.sources.arxiv.enabled:
+            if not config.direction.allow_categories and not config.direction.queries:
+                add(
+                    "WARN",
+                    "ARXIV_SCOPE_BROAD",
+                    "config",
+                    "arXiv source is enabled with empty allow_categories and empty queries.",
+                    "Set direction.allow_categories and/or direction.queries to narrow discovery scope.",
+                )
+            else:
+                add(
+                    "INFO",
+                    "ARXIV_SCOPE_CONFIGURED",
+                    "config",
+                    "arXiv source scope appears configured.",
+                    "No action needed.",
+                )
+
+        # Scholar Inbox checks
+        scholar = config.sources.scholar_alerts
+        if scholar.enabled:
+            provider = (scholar.email.provider or "").lower().strip()
+            if provider == "mbox":
+                mbox_path_raw = (scholar.email.mbox_path or "").strip()
+                if not mbox_path_raw:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_MBOX_PATH_MISSING",
+                        "provider",
+                        "Scholar provider is mbox but mbox_path is empty.",
+                        "Set sources.scholar_alerts.email.mbox_path to a valid .mbox file.",
+                    )
+                else:
+                    mbox_path = Path(mbox_path_raw)
+                    if not mbox_path.is_file():
+                        add(
+                            "ERROR",
+                            "SCHOLAR_MBOX_PATH_INVALID",
+                            "provider",
+                            f"Scholar mbox file not found: {mbox_path}",
+                            "Set mbox_path to an existing .mbox file path.",
+                        )
+                    else:
+                        add(
+                            "INFO",
+                            "SCHOLAR_MBOX_PATH_OK",
+                            "provider",
+                            f"Scholar mbox file found: {mbox_path}",
+                            "No action needed.",
+                        )
+            elif provider == "eml_dir":
+                eml_dir_raw = (scholar.email.eml_dir or "").strip()
+                if not eml_dir_raw:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_EML_DIR_MISSING",
+                        "provider",
+                        "Scholar provider is eml_dir but eml_dir is empty.",
+                        "Set sources.scholar_alerts.email.eml_dir to a valid directory.",
+                    )
+                else:
+                    eml_dir = Path(eml_dir_raw)
+                    if not eml_dir.is_dir():
+                        add(
+                            "ERROR",
+                            "SCHOLAR_EML_DIR_INVALID",
+                            "provider",
+                            f"Scholar eml_dir not found: {eml_dir}",
+                            "Set eml_dir to an existing directory containing .eml files.",
+                        )
+                    else:
+                        eml_count = len(list(eml_dir.glob("*.eml")))
+                        if eml_count == 0:
+                            add(
+                                "WARN",
+                                "SCHOLAR_EML_DIR_EMPTY",
+                                "provider",
+                                f"Scholar eml_dir exists but contains no .eml files: {eml_dir}",
+                                "Add alert emails or switch provider if using IMAP/Gmail.",
+                            )
+                        else:
+                            add(
+                                "INFO",
+                                "SCHOLAR_EML_DIR_OK",
+                                "provider",
+                                f"Scholar eml_dir contains {eml_count} .eml file(s): {eml_dir}",
+                                "No action needed.",
+                            )
+            elif provider in ("imap", "gmail"):
+                host = (scholar.email.imap_host or "").strip()
+                user = (scholar.email.imap_user or "").strip()
+                pw_env = (scholar.email.imap_password_env or "").strip()
+                password = (os.getenv(pw_env) or "").strip() if pw_env else ""
+                if not host:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_IMAP_HOST_MISSING",
+                        "provider",
+                        "Scholar IMAP/Gmail provider requires imap_host.",
+                        "Set sources.scholar_alerts.email.imap_host (for example imap.gmail.com).",
+                    )
+                if not user:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_IMAP_USER_MISSING",
+                        "provider",
+                        "Scholar IMAP/Gmail provider requires imap_user.",
+                        "Set sources.scholar_alerts.email.imap_user to your mailbox account.",
+                    )
+                if not pw_env:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_IMAP_PASSWORD_ENV_MISSING",
+                        "provider",
+                        "Scholar IMAP/Gmail provider requires imap_password_env.",
+                        "Set sources.scholar_alerts.email.imap_password_env.",
+                    )
+                elif not password:
+                    add(
+                        "ERROR",
+                        "SCHOLAR_IMAP_PASSWORD_NOT_SET",
+                        "provider",
+                        f"Environment variable {pw_env} is not set.",
+                        f"Export {pw_env} in your shell/session before running.",
+                    )
+                if host and user and pw_env and password:
+                    add(
+                        "INFO",
+                        "SCHOLAR_IMAP_CREDENTIALS_PRESENT",
+                        "provider",
+                        "Scholar IMAP/Gmail credentials look present.",
+                        "No action needed.",
+                    )
+
+        # Legacy mode check
+        if config.policy.type in ("deterministic", "linucb"):
+            add(
+                "WARN",
+                "LEGACY_POLICY_TYPE",
+                "config",
+                f"policy.type='{config.policy.type}' is legacy and not active in the default pipeline.",
+                "Prefer policy.type='off' unless you are testing compatibility behavior.",
+            )
+
+    add(
+        "WARN",
+        "DEVELOPER_MAINTENANCE_REMINDER",
+        "developer",
+        "Developer reminder: keep this diagnostics command updated when adding new failure modes.",
+        "When adding new features/sources, update diagnostics checks and tests in the same change.",
+    )
+    return findings
+
+
+def _emit_diagnostics_text(findings: list[DiagnosticFinding]) -> None:
+    severity_order = {"ERROR": 0, "WARN": 1, "INFO": 2}
+    ordered = sorted(
+        findings,
+        key=lambda f: (severity_order.get(f.severity, 99), f.category, f.check_id),
+    )
+    for f in ordered:
+        print(
+            f"[{f.severity}] {f.check_id} ({f.category})\n"
+            f"  - {f.message}\n"
+            f"  - Fix: {f.remediation}"
+        )
+    errors = sum(1 for f in findings if f.severity == "ERROR")
+    warns = sum(1 for f in findings if f.severity == "WARN")
+    infos = sum(1 for f in findings if f.severity == "INFO")
+    status = "FAILED" if errors > 0 else "PASSED_WITH_WARNINGS" if warns > 0 else "PASSED"
+    print(
+        f"\nDiagnostics status: {status} | "
+        f"errors={errors}, warnings={warns}, infos={infos}, total={len(findings)}"
+    )
 
 
 def main() -> None:
@@ -148,6 +547,22 @@ def main() -> None:
     open_parser.add_argument(
         "paper_id",
         help="Paper id or filename stem (e.g. 2403.00003)",
+    )
+
+    diag_parser = sub.add_parser(
+        "diagnostics",
+        help="Run comprehensive diagnostics and report all findings",
+    )
+    diag_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Path to config.yaml (default: config.yaml)",
+    )
+    diag_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Return diagnostics findings as JSON",
     )
 
     args = parser.parse_args()
@@ -403,6 +818,29 @@ def main() -> None:
             sys.stdout.write("\n")
         else:
             print(f"{len(results)} paper(s) matched query")  # pragma: no cover
+
+    elif args.command == "diagnostics":
+        findings = _run_diagnostics(args.config)
+        if args.json:
+            json.dump(
+                [
+                    {
+                        "severity": f.severity,
+                        "check_id": f.check_id,
+                        "category": f.category,
+                        "message": f.message,
+                        "remediation": f.remediation,
+                    }
+                    for f in findings
+                ],
+                sys.stdout,
+                indent=2,
+            )
+            sys.stdout.write("\n")
+        else:
+            _emit_diagnostics_text(findings)
+        if any(f.severity == "ERROR" for f in findings):
+            sys.exit(1)
 
 
 if __name__ == "__main__":

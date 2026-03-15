@@ -92,6 +92,7 @@ OpenAI summarization is optional. For CLI/cron, set `OPENAI_API_KEY` in your env
 | `python -m paper_agent list --json [--limit N] --config config.yaml` | Print recent local paper entries as JSON (optional `--limit`). |
 | `python -m paper_agent open <paper_id> --config config.yaml`         | Open the local Markdown note for the given paper id.           |
 | `python -m paper_agent search --query "<text>" --json --config config.yaml` | Search the local library JSON entries and print matches as JSON. |
+| `python -m paper_agent diagnostics --config config.yaml`              | Run comprehensive diagnostics with severity and fix hints.      |
 
 ### Run daily (automatic)
 
@@ -360,6 +361,9 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 - **Where are logs?**  
   `delivery.logs_dir/latest.log` (default: `logs/latest.log`). One summary line per run with `fetched_total`, `after_category`, `after_filters`, `selected`, `new_count`, `discovery_selected`, `scholar_new`, `scholar_provider`, and selection diagnostics such as `num_topics` / `exploration_picks`. Inspect this first when something looks wrong.
+
+- **How to run a full health check quickly?**  
+  Run `python -m paper_agent diagnostics --config config.yaml`. The command reports all findings by severity (`ERROR`, `WARN`, `INFO`) and includes concrete remediation steps for each item.
 
 - **Second run still shows new papers / duplicates?**  
   Ensure `delivery.state_dir` is stable and writable; do not clear `state/seen.json` between runs. Use the same `library_dir` and `paper_dir` across runs. If you changed the repo path or run from a different working directory, state may not be found and papers can be treated as new again.
