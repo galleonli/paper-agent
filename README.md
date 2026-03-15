@@ -7,7 +7,7 @@
 _Discover relevant arXiv papers with explainable, interest-aware selection (instead of raw keyword matching).
 Keep Google Scholar Alert emails in a separate inbox, then write local notes, daily and weekly digests, related-paper links, and BibTeX/RIS exports._
 
-[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Raycast at a glance**](#raycast-at-a-glance) · [**Raycast extension**](#raycast-extension) · [**Configuration**](#configuration-user-settings-first) · [**Google Scholar setup**](#google-scholar-setup) · [**Advanced tuning**](#advanced-tuning-legacy-compatibility) · [**Troubleshooting**](#troubleshooting)
+[**Quick start**](#quick-start) · [**Key features**](#key-features) · [**Raycast at a glance**](#raycast-at-a-glance) · [**Raycast extension**](#raycast-extension) · [**CLI and local runs**](#cli-and-local-runs) · [**Configuration**](#configuration-user-settings-first) · [**Google Scholar setup**](#google-scholar-setup) · [**Scheduling**](#scheduling) · [**Advanced tuning**](#advanced-tuning-legacy-compatibility) · [**Troubleshooting**](#troubleshooting)
 
 <br/>
 
@@ -49,12 +49,12 @@ Full command list and setup: [Raycast extension](#raycast-extension) below and t
 
 ## Quick start
 
-**First-time setup:** run `./scripts/bootstrap.sh` or the one-liner below (after cloning).
+Paper Agent has two start paths:
 
-> [!IMPORTANT]
-> **Background run (safe to close terminal):** use `nohup` (or cron/launchd) if you do not want to keep a terminal open.
-> Example: `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` (safe to close this terminal window).
-> If you run `python -m paper_agent run --config config.yaml` directly, it runs in the foreground until completion.
+- **Raycast extension (primary):** best daily workflow for running, browsing, searching, and scheduling.
+- **CLI (local):** direct command-line workflow for scripts, cron, or terminal-first usage.
+
+Clone and bootstrap the core first (both paths share this):
 
 ```bash
 git clone https://github.com/galleonli/paper-agent.git
@@ -62,70 +62,41 @@ cd paper-agent
 ./scripts/bootstrap.sh
 ```
 
-Or in one line (Unix/macOS):
-
-```bash
-git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./scripts/bootstrap.sh
-```
-
+One-liner (Unix/macOS): `git clone https://github.com/galleonli/paper-agent.git && cd paper-agent && ./scripts/bootstrap.sh`  
 On Windows (PowerShell), from the repo root: `.\scripts\bootstrap.ps1`
 
-Then run the pipeline once: `python -m paper_agent run --config config.yaml` (foreground mode; wait for completion), or `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` (background mode; safe to close this terminal window). Use `.venv/bin/python` or `.venv\Scripts\python.exe` if not activated. Edit `config.yaml` as needed (e.g. `interests.seeds`, `selection`, `export`, `advanced`). If you use **Run Paper Agent** from Raycast, or install the macOS daily schedule from Raycast, treat extension **Preferences as the primary place** to set runtime fields such as direction, delivery, summarize, sources, and `policy.type`. Use `config.yaml` mainly for the sections Raycast does not override. For CLI/cron runs, add those runtime sections to config or rely on defaults.
+### Path A: Raycast extension (primary)
 
-Useful next links:
+1. Install the extension from the [Raycast Store](https://www.raycast.com/) or the [extension repo](https://github.com/galleonli/paper-agent-raycast).
+2. Open Preferences (Raycast → Extensions → Paper Agent → Preferences), then set **Config file path**, **Paper directory**, and optional **Python executable**.
+3. Set runtime fields in Preferences (for example `direction`, `summarize`, and `sources`), then keep shared core settings in `config.yaml` (for example `interests`, `selection`, `export`, and state/log paths).
+4. Optionally customize prompts in `config.yaml` (for example `prompts.research_summary_template`); defaults are already provided.
+5. Run **Run Paper Agent** or open **Today Papers** from Raycast.
 
-- Need Gmail / Google Scholar email ingestion? Start with [Google Scholar setup](#google-scholar-setup).
-- Want the Raycast workflow and scheduled runs? Jump to [Raycast extension](#raycast-extension).
-- Curious about legacy `policy.*` or `autotune.*` knobs in `config.yaml`? Read [Advanced tuning (legacy compatibility)](#advanced-tuning-legacy-compatibility) before changing them.
+### Path B: CLI (local)
 
-First run writes notes, daily digest, weekly digest, and any configured exports; second run with same state prints no new papers.
+1. Copy `config.example.yaml` to `config.yaml` (if needed), then edit runtime and core fields in YAML:
+   - Runtime sections: `direction`, `delivery`, `summarize`, `sources`.
+   - Core/shared sections: `interests`, `selection`, `export`, `advanced`, `prompts`.
+2. Run once from terminal:
+   - Foreground: `python -m paper_agent run --config config.yaml`
+   - Background: `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &`
+3. Optionally customize prompts in `config.yaml` (for example `prompts.research_summary_template`); defaults are already provided.
 
-OpenAI summarization is optional. For CLI/cron, set `OPENAI_API_KEY` in your environment if needed. For Raycast, prefer filling **OpenAI API Key** directly in extension Preferences. If no key is available, the pipeline still runs and falls back to abstract/snippet-based notes.
+### Next sections:
 
-### CLI commands
-
-| Command                                                              | Description                                                    |
-| -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `python -m paper_agent run --config config.yaml`                     | Run the full pipeline once (foreground; keep terminal open).   |
-| `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` | Run once in background (safe to close this terminal window). |
-| `python -m paper_agent today --json --config config.yaml`            | Print today's local paper entries as JSON.                     |
-| `python -m paper_agent list --json [--limit N] --config config.yaml` | Print recent local paper entries as JSON (optional `--limit`). |
-| `python -m paper_agent open <paper_id> --config config.yaml`         | Open the local Markdown note for the given paper id.           |
-| `python -m paper_agent search --query "<text>" --json --config config.yaml` | Search the local library JSON entries and print matches as JSON. |
-| `python -m paper_agent diagnostics --config config.yaml`              | Run comprehensive diagnostics with severity and fix hints.      |
-
-### Run daily (automatic)
-
-You can run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
-
-```bash
-CRON_TZ=Europe/Berlin
-0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
-```
-
-Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed.
-
-On macOS, the Raycast extension also includes **Install Daily Schedule**, which installs a `launchd` job that:
-
-- runs the same shared runner script every day at **04:00**
-- runs once after boot/login if the Mac was off at 04:00 and the day has not succeeded yet
-- skips duplicate runs after a successful run on the same day
-- sends a macOS notification when the scheduled run succeeds or fails
-- writes schedule artifacts under `~/Library/Application Support/PaperAgent/`
-- writes launch logs under `~/Library/Logs/PaperAgent/`
-
-The extension also includes:
-
-- **Remove Daily Schedule** to uninstall the `launchd` job in one step while keeping logs and status history
-- **Check Run Status** to see run status for both scheduled and manual runs: whether the daily schedule is installed, today's result, last successful day, and the most recent run metadata
-
-Re-run **Install Daily Schedule** after changing Raycast Preferences that affect the pipeline, because the scheduled job refreshes its runtime config and secrets from the current preferences at install time. More options: [Scheduling](#scheduling).
+- Raycast details and command behavior: [Raycast extension](#raycast-extension)
+- CLI details and command reference: [CLI and local runs](#cli-and-local-runs)
+- Config details: [Configuration (user settings first)](#configuration-user-settings-first)
+- Scholar inbox setup: [Google Scholar setup](#google-scholar-setup)
+- Daily scheduling: [Run daily (automatic)](#run-daily-automatic)
+- Legacy policy/tuning notes: [Advanced tuning (legacy compatibility)](#advanced-tuning-legacy-compatibility)
 
 ---
 
 ## Raycast extension
 
-A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper or config directory. **The extension lives in a separate repository:** [paper-agent-raycast](https://github.com/galleonli/paper-agent-raycast). Install the **Paper Agent core** (this repo) first, then install the extension from the Raycast Store or the extension repo. **Status:** Early MVP; API and behavior may change.
+A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper or config directory. **The extension lives in a separate repository:** [paper-agent-raycast](https://github.com/galleonli/paper-agent-raycast). Install the **Paper Agent core** (this repo) first, then install the extension from the Raycast Store or the extension repo.
 
 ### Setup
 
@@ -152,22 +123,23 @@ The Scholar Inbox reads **Google Scholar Alert emails** only. No RSS, no crawlin
 
 Core config supports four provider values:
 
+- **`imap` (recommended):** generic IMAP mailbox (commonly Gmail IMAP), best for daily automation.
+- **`gmail`:** Gmail-flavored IMAP alias; same mailbox flow, with Gmail label support.
 - **`mbox`:** one local mbox file.
 - **`eml_dir`:** a directory containing `.eml` files.
-- **`imap`:** generic IMAP mailbox (commonly Gmail IMAP).
-- **`gmail`:** Gmail-flavored IMAP alias; same mailbox flow, with Gmail label support.
 
-If you run from **Raycast**, or use **Install Daily Schedule** from Raycast, configure Scholar Inbox in **extension Preferences first**. The current Raycast workflow supports IMAP/Gmail-style mailbox settings, while local-path providers such as `mbox` and `eml_dir` are mainly for CLI/cron/manual config runs.
+If you run from **Raycast**, or use **Install Daily Schedule** from Raycast, configure Scholar Inbox in **extension Preferences *only***. The current Raycast workflow supports IMAP/Gmail-style mailbox settings, while local-path providers such as `mbox` and `eml_dir` are mainly for CLI/cron/manual config runs.
 
 Next steps by provider:
 
+- **imap / gmail (recommended):** set `email.imap_host`, `email.imap_user`, `email.imap_password_env` (default env var name: `IMAP_PASSWORD`), and optional `email.gmail_label`.
 - **mbox:** set `email.mbox_path`.
 - **eml_dir:** set `email.eml_dir`.
-- **imap / gmail:** set `email.imap_host`, `email.imap_user`, `email.imap_password_env` (default env var name: `IMAP_PASSWORD`), and optional `email.gmail_label`.
 
 ### Gmail IMAP (recommended for automation)
 
-If you use **Raycast Run Paper Agent** or the Raycast-installed daily schedule, put these values in **Preferences** instead of duplicating them in `config.yaml`.
+> [!IMPORTANT]
+> If you use **Raycast Run Paper Agent** or the Raycast-installed daily schedule, put these values in **Preferences** instead of duplicating them in `config.yaml`.
 
 Recommended setup:
 
@@ -177,7 +149,7 @@ Recommended setup:
 4. Export the password into your shell environment instead of committing it to YAML.
 5. Point `email.imap_password_env` to that variable.
 
-Example:
+Example if you are using local CLI instead of Raycast extension:
 
 ```bash
 export IMAP_PASSWORD='your-16-char-app-password'
@@ -207,9 +179,44 @@ Verification checklist:
 
 ---
 
+## CLI and local runs
+
+If you prefer to run the pipeline from the command line (without the Raycast extension), use the core CLI. Add runtime sections such as `direction`, `delivery`, `summarize`, and `sources` to `config.yaml` or rely on defaults.
+
+**Foreground (keep terminal open):** `python -m paper_agent run --config config.yaml`  
+**Background (safe to close terminal):** `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &`  
+Use `.venv/bin/python` or `.venv\Scripts\python.exe` if the venv is not activated.
+
+| Command                                                              | Description                                                    |
+| -------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `python -m paper_agent run --config config.yaml`                     | Run the full pipeline once (foreground).                       |
+| `nohup .venv/bin/python -m paper_agent run --config config.yaml >> logs/manual-run.log 2>&1 &` | Run once in background (safe to close terminal). |
+| `python -m paper_agent today --json --config config.yaml`            | Print today's local paper entries as JSON.                     |
+| `python -m paper_agent list --json [--limit N] --config config.yaml` | Print recent local paper entries as JSON (optional `--limit`). |
+| `python -m paper_agent open <paper_id> --config config.yaml`         | Open the local Markdown note for the given paper id.           |
+| `python -m paper_agent search --query "<text>" --json --config config.yaml` | Search the local library and print matches as JSON.   |
+| `python -m paper_agent diagnostics --config config.yaml`             | Run diagnostics with severity and fix hints.                   |
+
+For OpenAI summarization with CLI/cron, set `OPENAI_API_KEY` in your environment. If not set, the pipeline still runs and uses abstract/snippet-based notes.
+
+### Run daily (automatic)
+
+You can run the agent every day via **cron** (or your system scheduler). Set `CRON_TZ` for your timezone, then add a daily job:
+
+```bash
+CRON_TZ=Europe/Berlin
+0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
+```
+
+Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed.
+
+**On macOS with the Raycast extension:** use **Install Daily Schedule** to install a `launchd` job that runs at **04:00**, catches up after boot if the Mac was off, skips duplicate runs, and sends a notification on success/failure. **Remove Daily Schedule** uninstalls it; **Check Run Status** shows schedule and run status. See [Raycast extension](#raycast-extension) and the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
+
+---
+
 ## Configuration (user settings first)
 
-Copy `config.example.yaml` to `config.yaml`.
+Copy `config.example.yaml` to `config.yaml` if there's no `config.yaml` in the repo root.
 
 Use `config.yaml` mainly for:
 
@@ -351,7 +358,20 @@ Papers: 3
 
 ## Scheduling
 
-Daily automation is covered in [Quick start → Run daily (automatic)](#run-daily-automatic). Use cron (or launchd / systemd timer) with `CRON_TZ` set to your timezone.
+### Raycast
+
+For macOS automation from Raycast, use **Install Daily Schedule** in the extension. It installs a `launchd` job (04:00 + catch-up) and integrates with **Check Run Status** and **Remove Daily Schedule**. See [Raycast extension](#raycast-extension).
+
+### CLI
+
+For terminal-first automation, use cron (or your system scheduler) with `CRON_TZ`.
+
+```bash
+CRON_TZ=Europe/Berlin
+0 8 * * * cd /path/to/paper-agent && .venv/bin/python -m paper_agent run --config config.yaml >> logs/cron.log 2>&1
+```
+
+Full setup notes: [CLI and local runs → Run daily (automatic)](#run-daily-automatic).
 
 ---
 
