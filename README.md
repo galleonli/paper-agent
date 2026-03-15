@@ -36,14 +36,14 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 
 ## Raycast at a glance
 
-If you mainly use Raycast, these are the implemented commands:
+If you mainly use Raycast, the extension provides:
 
-- **Run & automation:** `Run Paper Agent`, `Install Daily Schedule` (04:00 + catch-up), `Remove Daily Schedule`, `Check Run Status`
-- **Browse & search:** `Today Papers`, `Recent Papers`, `Search Papers`
-- **Workflow:** `Favorite Papers`, `Reading Queue`, `Open Paper Directory`
-- **In-list actions:** open paper/note, related-paper actions, mark read/unread, add/remove favorites, add/remove reading queue
+- **Run & automation:** Run Paper Agent, Install Daily Schedule (04:00 + catch-up), Remove Daily Schedule, Check Run Status
+- **Browse & search:** Today Papers, Recent Papers, Search Papers
+- **Workflow:** Favorite Papers, Reading Queue, Open Paper Directory, Open Config Directory
+- **In-list actions:** open paper/note, related papers, mark read/unread, favorites, reading queue
 
-Details and setup: [Raycast extension](#raycast-extension).
+Full command list and setup: [Raycast extension](#raycast-extension) below and the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
 
 ---
 
@@ -118,81 +118,24 @@ Re-run **Install Daily Schedule** after changing Raycast Preferences that affect
 
 ## Raycast extension
 
-A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, inspect related local papers, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper directory from a Paper Agent workflow.
+A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, browse today/recent papers, search the local library, manage favorites and a reading queue, schedule daily runs on macOS, and open the paper or config directory. **The extension lives in a separate repository:** [paper-agent-raycast](https://github.com/galleonli/paper-agent-raycast). Install the **Paper Agent core** (this repo) first, then install the extension from the Raycast Store or the extension repo. **Status:** Early MVP; API and behavior may change.
 
-**The extension lives in a separate repository:** [paper-agent-raycast](https://github.com/galleonli/paper-agent-raycast) (or your fork). Install the **Paper Agent core** (this repo) first, then install the extension from the Raycast Store or from the extension repo.
+### Setup
 
-**Status:** Early MVP. The API and behavior may change between versions.
+1. **Install Paper Agent core** (this repo): see [Quick start](#quick-start) above.
+2. **Install the extension** from the [Raycast Store](https://www.raycast.com/) or clone the [extension repo](https://github.com/galleonli/paper-agent-raycast) and run `npm install` and `npm run dev`.
+3. **Set Preferences** (Raycast → Extensions → Paper Agent → Preferences): **Config file path**, **Paper directory**, and optionally **Python executable**.
 
-### Requirements
+**Full command list, Core not found behavior, and extension development:** see the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
 
-- Raycast (macOS)
-- Paper Agent core installed (this repository), with a valid `config.yaml` and working Python environment
-- A local Paper Agent library (JSON outputs under a date-based folder structure) after you run the pipeline
+### Config vs Preferences when using Run Paper Agent
 
-### Getting started
+When you use **Run Paper Agent** or **Install Daily Schedule** from Raycast, the extension builds runtime config from **Preferences**, not from `config.yaml`, for these sections:
 
-1. **Install Paper Agent core** (this repo): clone, create venv, `pip install -r requirements.txt`, copy `config.example.yaml` to `config.yaml`, and configure it.
-2. **Install the Raycast extension** from the [Raycast Store](https://www.raycast.com/) or from the [extension repository](https://github.com/galleonli/paper-agent-raycast): clone that repo, run `npm install` and `npm run dev` to load it in Raycast during development.
-3. **Set extension Preferences**: **Config file path** (full path to your `config.yaml`), **Paper directory** (your `delivery.paper_dir`). Optionally set **Python executable** if you use a custom path.
+- **direction** (limits, categories, keywords), **delivery** (paper_dir and library path), **summarize**, **sources** (arXiv + Scholar Inbox), **policy.type**
+- Local-only paths such as `delivery.state_dir` and `delivery.logs_dir` still come from `config.yaml`
 
-If the extension cannot find the core (missing config, wrong paths, or `paper_agent` not runnable), it shows **Core not found** with a link to this repo and a **Copy bootstrap command** action that copies a one-line install command to the clipboard. When **Config file path** is set, an **Open Config Directory** action is also available there and in **Check Run Status** to open the folder containing `config.yaml` in Finder. A top-level **Open Config Directory** command opens the same folder from anywhere.
-
-### Configuration
-
-By default, the extension expects your Paper Agent project at:
-
-- Paper directory and config path (set in Raycast Preferences; no hardcoded path)
-- Library layout: `<paper_dir>/library/<YYYY-MM-DD>/*.json`
-
-If your Paper Agent project lives elsewhere, set **Config file path** and **Paper directory** in the extension Preferences (Raycast → Extensions → Paper Agent → Preferences).
-
-For **Recent Papers**, the limit is set in extension Preferences (Recent papers limit).
-
-#### Config vs Preferences when using Run Paper Agent
-
-When you trigger **Run Paper Agent** from Raycast, the extension uses a **preference-first** rule for runtime sections:
-
-- **direction** (limits, categories, keywords, queries), **delivery** (paper_dir and derived library path), **summarize** (LLM summary), and **sources** (arXiv + Scholar Inbox) are built **entirely from extension Preferences**. Values in `config.yaml` for these sections are **not** used for the Run Paper Agent command, except that local-only paths like `delivery.state_dir` and `delivery.logs_dir` still come from config.
-- **policy.type** is also taken from extension Preferences (currently `off` in the UI).
-- The remaining config sections (such as `interests`, `selection`, `feedback`, `export`, `advanced`, `prompts`, and legacy compatibility blocks) are still read from `config.yaml`.
-
-For **CLI or cron** runs (`python -m paper_agent run --config config.yaml`), the app reads the full config from YAML. If `direction`, `delivery`, `summarize`, or `sources` are missing in the file, the Python app uses its built-in defaults.
-
-The same preference-first behavior also applies to the macOS `launchd` job installed by **Install Daily Schedule**, because that command snapshots the current Preferences into its runtime config and environment.
-
-### Commands
-
-| Command             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Run Paper Agent** | Runs the full pipeline once. Builds direction, delivery, summarize, sources, and `policy.type` from extension Preferences; reads the rest from `config.yaml`. Shows a toast when done, skipped, or failed.                                                                                                                                                                                                                                                                                                                                                          |
-| **Open Paper Directory** | Opens the configured paper directory in Finder. Useful for jumping directly to `library/`, daily digest files, and exported files.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Open Config Directory** | Opens the folder that contains your `config.yaml` (the core repo root) in Finder. Also available as an action in **Run Paper Agent** (Core not found) and **Check Run Status** when Config file path is set.                                                                                                                                                                                                                                                                                                                                                     |
-| **Install Daily Schedule** | Installs or updates a macOS `launchd` job for **04:00** local time. The job uses the same shared runner script as **Run Paper Agent**, catches up after boot/login when 04:00 was missed, and writes logs under `~/Library/Logs/PaperAgent/`. Re-run it after changing scheduling-related preferences.                                                                                                                                                                                                 |
-| **Remove Daily Schedule** | Unloads and removes the macOS `launchd` job for the daily run. It keeps the log and state directories so you can still inspect previous runs.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Check Run Status** | Shows run status for both scheduled (launchd) and manual runs: whether the daily schedule is installed, today's result, last successful day, and the most recent run metadata (mode, date, status, log path) with quick actions to open the config directory, log directory, or state directory.                                                                                                                                                                                                                                                                  |
-| **Today Papers**    | Reads today's papers from local library outputs via the Paper Agent `today --json` CLI. Source: `<library_dir>/<YYYY-MM-DD>/*.json`. Detail pane: title, authors, categories, abstract, "Why this paper", optional research summary, and any related local papers. Actions: Open paper, open local note, open related notes or related links, mark read/unread, add/remove favorites, add/remove reading queue, and jump to favorites or queue. Note path: uses `note_path` from JSON if set, otherwise `<date_dir>/<basename>.md`.                                     |
-| **Recent Papers**   | Source: `<library_dir>/<YYYY-MM-DD>/*.json` from the last few days. Sorting: newest first, using `published` when present, otherwise `date` from the JSON or folder name. Supports the same related-paper, read/unread, favorites, and reading-queue actions as Today Papers.                                                                                                                                                                                                                                                                                    |
-| **Search Papers**   | Scope: all JSON files under `<library_dir>/*/*.json`. Searchable: `title`, `authors`, `abstract`, `categories`, `id`, `date`, `published`. Case-insensitive substring match; query split on whitespace with AND logic. Ranking: title/authors > abstract > categories/metadata; phrase matches get a boost; recency tie-breaker. Date matching: substrings (e.g. `2026`, `2026-03-11`) and arXiv-style `YYMM.DD` normalized to `20YY-MM-DD` (e.g. `2603.11` → `2026-03-11`). Supports the same related-paper, read/unread, favorites, and reading-queue actions as Today Papers. |
-| **Favorite Papers** | Shows papers you manually added to favorites from any list view. Favorites are stored locally in Raycast and can be removed directly from this list. Read/unread state and reading-queue state are also shown here.                                                                                                                                                                                                                                                                                                                                              |
-| **Reading Queue**   | Shows papers you manually queued from any list view. The queue is stored locally in Raycast, keeps newest queued items first, and supports the same open/read/favorite actions as the other list views.                                                                                                                                                                                                                                                                                                                                                            |
-
-#### Read/unread behavior
-
-- Each paper is shown with a local read/unread marker in Raycast.
-- A paper is marked as **read** after it stays selected in the detail view for at least 5 seconds.
-- You can also manually switch a paper between **Mark as Read** and **Mark as Unread** from the action panel.
-- Read/unread state, favorites, and reading queue are stored locally in Raycast and do not modify your Paper Agent library JSON files.
-
-#### Related local papers
-
-- If a note metadata JSON contains `related_local_papers`, Raycast shows them in the detail pane under **Related local papers**.
-- The action panel adds a **Related Papers** section when any related item has a local note or external link.
-- Related-paper links are generated from your full local library and are meant as lightweight, explainable navigation help rather than embedding-based semantic search.
-
-### Development (Raycast)
-
-From the [extension repository](https://github.com/galleonli/paper-agent-raycast): **Build:** `npm run build` · **Lint:** `npm run lint`
+The rest (**interests**, **selection**, **export**, **advanced**, **prompts**, legacy blocks) is read from `config.yaml`. For **CLI or cron** runs, the app reads the full config from YAML; Preferences do not apply. The same preference-first behavior applies to the macOS `launchd` job installed by **Install Daily Schedule**.
 
 ---
 
@@ -458,4 +401,4 @@ Daily automation is covered in [Quick start → Run daily (automatic)](#run-dail
 
 ## License
 
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). See [LICENSE](LICENSE) for the full text.
+This project is licensed under the [MIT License](LICENSE).
