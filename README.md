@@ -46,7 +46,7 @@ Keep Google Scholar Alert emails in a separate inbox, then write local notes, da
 
 If you mainly use Raycast, the extension provides:
 
-- **Run & automation:** Run Paper Agent, Install Daily Schedule (04:00 + catch-up), Remove Daily Schedule, Check Run Status
+- **Run & automation:** Run Paper Pipeline, Install Daily Schedule (04:00 + catch-up), Remove Daily Schedule, Check Run Status
 - **Browse & search:** Today Papers, Recent Papers, Search Papers
 - **Workflow:** Favorite Papers, Reading Queue, Open Paper Directory, Open Config Directory
 - **In-list actions:** open paper/note, related papers, mark read/unread, favorites, reading queue
@@ -75,10 +75,10 @@ One-liner (Unix/macOS): `git clone https://github.com/galleonli/paper-agent.git 
 ### Path A: Raycast extension (primary)
 
 1. Install the extension from the [Raycast Store](https://www.raycast.com/) or the [extension repo](https://github.com/galleonli/paper-agent-raycast).
-2. Open Preferences (Raycast → Extensions → Paper Agent → Preferences), then set **Config file path**, **Paper directory**, and optional **Python executable**.
+2. Open Preferences (Raycast → Extensions → Paper Agent → Preferences), then set **Config File Path**, **Paper Directory**, and optional **Python Executable**.
 3. Set runtime fields in Preferences (for example `direction`, `summarize`, and `sources`), then keep shared core settings in `config.yaml` (for example `interests`, `selection`, `export`, and state/log paths).
 4. Optionally customize prompts in `config.yaml` (for example `prompts.research_summary_template`); defaults are already provided.
-5. Run **Run Paper Agent** or open **Today Papers** from Raycast.
+5. Run **Run Paper Pipeline** or open **Today Papers** from Raycast.
 
 ### Path B: CLI (local)
 
@@ -109,13 +109,13 @@ A [Raycast](https://www.raycast.com/) extension lets you run the pipeline, brows
 
 1. **Install Paper Agent core** (this repo): see [Quick start](#quick-start) above.
 2. **Install the extension** from the [Raycast Store](https://www.raycast.com/) or clone the [extension repo](https://github.com/galleonli/paper-agent-raycast) and run `npm install` and `npm run dev`.
-3. **Set Preferences** (Raycast → Extensions → Paper Agent → Preferences): **Config file path**, **Paper directory**, and optionally **Python executable**.
+3. **Set Preferences** (Raycast → Extensions → Paper Agent → Preferences): **Config File Path**, **Paper Directory**, and optionally **Python Executable**.
 
 **Full command list, Core not found behavior, and extension development:** see the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
 
-### Config vs Preferences when using Run Paper Agent
+### Config vs Preferences when using Run Paper Pipeline
 
-When you use **Run Paper Agent** or **Install Daily Schedule** from Raycast, the extension builds runtime config from **Preferences**, not from `config.yaml`, for these sections:
+When you use **Run Paper Pipeline** or **Install Daily Schedule** from Raycast, the extension builds runtime config from **Preferences**, not from `config.yaml`, for these sections:
 
 - **direction** (limits, categories, keywords), **delivery** (paper_dir and library path), **summarize**, **sources** (arXiv + Scholar Inbox), **policy.type**
 - Local-only paths such as `delivery.state_dir` and `delivery.logs_dir` still come from `config.yaml`
@@ -146,7 +146,7 @@ Next steps by provider:
 ### Gmail IMAP (recommended for automation)
 
 > [!IMPORTANT]
-> If you use **Raycast Run Paper Agent** or the Raycast-installed daily schedule, put these values in **Preferences** instead of duplicating them in `config.yaml`.
+> If you use **Raycast Run Paper Pipeline** or the Raycast-installed daily schedule, put these values in **Preferences** instead of duplicating them in `config.yaml`.
 
 Recommended setup:
 
@@ -237,7 +237,7 @@ Use `config.yaml` mainly for:
 
 For **CLI/cron** runs, you can also define runtime sections such as `direction`, `delivery`, `summarize`, and `sources` in `config.yaml`.
 
-For **Raycast Run Paper Agent** and the Raycast-installed macOS daily schedule, treat **Preferences as the source of truth** for runtime sections such as:
+For **Raycast Run Paper Pipeline** and the Raycast-installed macOS daily schedule, treat **Preferences as the source of truth** for runtime sections such as:
 
 - `direction`
 - `delivery.paper_dir` / derived library path
