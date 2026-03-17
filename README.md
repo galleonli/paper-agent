@@ -406,6 +406,9 @@ If your issue is in CLI/cron runs, config parsing, Scholar ingestion, or output 
 - **No discovery papers at all (arXiv)?**  
   Check: (1) `direction.allow_categories` or `direction.queries` — at least one must yield results. (2) `direction.lookback_days` — papers are filtered by update date within this window. (3) `direction.include_keywords` / Required keywords — if non-empty, each paper needs at least one keyword match in the title or abstract, or a seed match, to pass. Relax filters or add keywords and re-run.
 
+- **Run failed with "arXiv API request failed: 429" or pipeline exit code 1?**  
+  **429** means arXiv rate limit (Too Many Requests). The pipeline retries automatically with backoff; if it still fails, wait 15–30 minutes and run again. Avoid running the pipeline repeatedly in a short time. See **Logs and state** above for where to find the run log.
+
 ### Scholar Inbox
 
 - **No Scholar items?**
