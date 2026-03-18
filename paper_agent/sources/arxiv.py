@@ -2,6 +2,7 @@
 arXiv fetcher via Atom API.
 Queries by category; parses entries to common Paper model.
 Respects rate limits (see Safety in README); use max_results and delay as configured.
+Retries on 429 (Too Many Requests) with exponential backoff.
 """
 
 import re
@@ -15,6 +16,41 @@ from paper_agent.core.models import Paper
 
 
 ARXiv_API_BASE = "https://export.arxiv.org/api/query"
+ARXIV_429_MAX_RETRIES = 3
+ARXIV_429_BASE_WAIT_SECONDS = 20
+
+
+def _get_with_retry(
+    url: str,
+    timeout_seconds: int,
+    max_retries: int = ARXIV_429_MAX_RETRIES,
+    base_wait: float = ARXIV_429_BASE_WAIT_SECONDS,
+) -> requests.Response:
+    """GET url; on 429 retry with exponential backoff. Raises RequestException on final failure."""
+    last_exc: requests.RequestException | None = None
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, timeout=timeout_seconds)
+            if resp.status_code == 429 and attempt < max_retries - 1:
+                wait = base_wait * (2**attempt)
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as e:
+            last_exc = e
+            if (
+                getattr(e, "response", None) is not None
+                and e.response.status_code == 429
+                and attempt < max_retries - 1
+            ):
+                wait = base_wait * (2**attempt)
+                time.sleep(wait)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("arXiv request failed after retries")
 ATOM_NS = "http://www.w3.org/2005/Atom"
 ARXIV_NS = "http://arxiv.org/schemas/atom"
 
@@ -47,8 +83,7 @@ def fetch_arxiv_by_id(
     params = {"id_list": arxiv_id}
     url = f"{ARXiv_API_BASE}?{urlencode(params)}"
     try:
-        resp = requests.get(url, timeout=timeout_seconds)
-        resp.raise_for_status()
+        resp = _get_with_retry(url, timeout_seconds, max_retries=2, base_wait=10)
     except requests.RequestException:
         return None
     root = ET.fromstring(resp.content)
@@ -144,8 +179,7 @@ def _fetch_one_query(
         }
         url = f"{ARXiv_API_BASE}?{urlencode(params)}"
         try:
-            resp = requests.get(url, timeout=timeout_seconds)
-            resp.raise_for_status()
+            resp = _get_with_retry(url, timeout_seconds)
         except requests.RequestException as e:
             raise RuntimeError(f"arXiv API request failed: {e}") from e
 
@@ -222,8 +256,7 @@ def fetch_arxiv(
         }
         url = f"{ARXiv_API_BASE}?{urlencode(params)}"
         try:
-            resp = requests.get(url, timeout=timeout_seconds)
-            resp.raise_for_status()
+            resp = _get_with_retry(url, timeout_seconds)
         except requests.RequestException as e:
             raise RuntimeError(f"arXiv API request failed: {e}") from e
 

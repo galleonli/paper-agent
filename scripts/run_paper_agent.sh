@@ -99,11 +99,12 @@ write_status() {
   local run_status="$1"
   local reason="${2:-}"
   local exit_code="${3:-}"
-  local finished_at
+  local finished_at finish_date
   finished_at="$(date '+%Y-%m-%d %H:%M:%S')"
+  finish_date="$(date +%F)"
   local mode_json date_json status_json reason_json exit_json started_json finished_json log_json config_json root_json
   mode_json="$(json_escape "$MODE")"
-  date_json="$(json_escape "$TODAY")"
+  date_json="$(json_escape "$finish_date")"
   status_json="$(json_escape "$run_status")"
   reason_json="$(json_escape "$reason")"
   exit_json="$(json_escape "$exit_code")"
@@ -231,6 +232,7 @@ RUN_LOG="${LOG_DIR}/${TIMESTAMP}-${MODE}.log"
 
 cd "$AGENT_ROOT" || {
   echo "Failed to enter agent root: $AGENT_ROOT" | tee -a "$RUN_LOG" >&2
+  write_status "failed" "agent-root-inaccessible" "1"
   exit 1
 }
 
