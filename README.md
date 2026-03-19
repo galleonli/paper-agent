@@ -217,7 +217,9 @@ CRON_TZ=Europe/Berlin
 
 Replace `/path/to/paper-agent` with your repo path. The example runs at 08:00 local time; change `0 8` to another hour if needed.
 
-**On macOS with the Raycast extension:** use **Install Daily Schedule** to install a `launchd` job that runs at **04:00**, catches up after boot if the Mac was off, skips duplicate runs, and sends a notification on success/failure. **Remove Daily Schedule** uninstalls it; **Check Run Status** shows schedule and run status. See [Raycast extension](#raycast-extension) and the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
+**On macOS with the Raycast extension:** use **Install Daily Schedule** to install a `launchd` job that runs at **04:00**, catches up after boot/login if 04:00 was missed, skips duplicate runs, and sends a notification on success/failure. **Remove Daily Schedule** uninstalls it; **Check Run Status** shows schedule and run status. See [Raycast extension](#raycast-extension) and the [extension README](https://github.com/galleonli/paper-agent-raycast#readme).
+
+The LaunchAgent is **loaded** only when (1) you **log in** to the Mac (e.g. after reboot or logout/login), or (2) you run **Install Daily Schedule** in Raycast. The “catch-up” run happens at those load times (via `RunAtLoad`), not when you wake the Mac from sleep or when you open Raycast. If the Mac was asleep at 04:00, the scheduled run is skipped until the next 04:00 unless you log in again or re-run Install Daily Schedule.
 
 ---
 
@@ -431,6 +433,9 @@ If your issue is in CLI/cron runs, config parsing, Scholar ingestion, or output 
 
 - **Cron job does not run or runs at wrong time?**  
   Set `CRON_TZ` to your timezone (e.g. `CRON_TZ=Europe/Berlin`). Use the full path to the repo and to the venv Python in the cron line. Ensure the user running cron has read access to the repo and write access to `state_dir`, `library_dir`, `paper_dir`, and `logs_dir`.
+
+- **macOS daily schedule (Raycast): today’s 04:00 run didn’t happen?**  
+  The `launchd` job runs at 04:00 only if the Mac is awake; it does not run while the Mac is off or asleep. Catch-up runs only when the LaunchAgent is **loaded**—i.e. at **user login** (after reboot or logout/login) or when you run **Install Daily Schedule**. Opening Raycast or the extension does **not** load the agent. So if the Mac was asleep at 04:00 and you only woke it later (without logging in again), no run occurs until the next 04:00. To run today: use **Run Paper Agent** manually, or log out and back in / re-run **Install Daily Schedule** to trigger the catch-up run. For schedule and launchd details, see [paper-agent-raycast Troubleshooting](https://github.com/galleonli/paper-agent-raycast#troubleshooting).
 
 Again: For Raycast-specific run/schedule issues (launchd install status, Core not found, Preferences wiring), see [paper-agent-raycast Troubleshooting](https://github.com/galleonli/paper-agent-raycast#troubleshooting).
 
