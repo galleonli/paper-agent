@@ -4,6 +4,7 @@ Pipeline orchestration: load config -> fetch -> lookback -> filter/rank -> state
 Catch-up safe and idempotent: seen state is persisted after local output.
 """
 
+from datetime import date
 from pathlib import Path
 
 from paper_agent.core.config import Config, load_config

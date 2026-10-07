@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paper-agent"
+version = "0.4.1"
+description = "A local paper discovery and reading workflow with a Raycast companion"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dynamic = ["dependencies"]
+
+[project.urls]
+Repository = "https://github.com/galleonli/paper-agent"
+Issues = "https://github.com/galleonli/paper-agent/issues"
+
+[project.scripts]
+paper-agent = "paper_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["paper_agent*"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}

@@ -2,6 +2,13 @@
 
 All notable changes to the Paper Agent core (pipeline, CLI, config) are documented here.
 
+## [0.4.1] - 2026-10-06
+
+- Package the core as a wheel and source distribution with a `paper-agent` CLI entry point.
+- Add Python 3.11 and 3.14 checks and package validation in CI.
+- Fix the missing `date` import that prevented pipeline imports on Python 3.11.
+- Shorten the README and preserve detailed instructions in the user guide.
+
 ## [0.4.0] - 2026-03-16
 
 ### Added

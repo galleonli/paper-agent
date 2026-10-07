@@ -66,14 +66,14 @@ def test_build_research_summary_zh_language_heading() -> None:
 
     with patch(
         "paper_agent.core.summarize._call_openai_chat",
-        return_value="这是结构化总结。",
+        return_value="\u8fd9\u662f\u7ed3\u6784\u5316\u603b\u7ed3\u3002",
     ):
         out = build_research_summary(_paper(), "why", cfg)
 
     assert out is not None
     heading, body = out
-    assert heading == "研究视角总结"
-    assert body == "这是结构化总结。"
+    assert heading == "\u7814\u7a76\u89c6\u89d2\u603b\u7ed3"
+    assert body == "\u8fd9\u662f\u7ed3\u6784\u5316\u603b\u7ed3\u3002"
 
 
 def test_build_research_prompt_uses_config_override_template() -> None:
