@@ -283,8 +283,9 @@ def test_fetch_imap_provider_uses_env_password_and_parses_items(tmp_path: Path) 
     eml_bytes = (FIXTURE_DIR / "sample_scholar_alert_html.eml").read_bytes()
 
     class _FakeIMAP:
-        def __init__(self, host: str) -> None:
+        def __init__(self, host: str, *, timeout: int) -> None:
             assert host == "imap.gmail.com"
+            assert timeout > 0
             self._selected = None
             self.logged_out = False
 
@@ -333,8 +334,8 @@ def test_fetch_imap_provider_uses_env_password_and_parses_items(tmp_path: Path) 
     assert all(p.link_abs.startswith("http") for p in result)
 
 
-def test_fetch_imap_missing_env_password_returns_empty(tmp_path: Path) -> None:
-    """provider=imap without env password returns [] and does not connect."""
+def test_fetch_imap_missing_env_password_reports_error(tmp_path: Path) -> None:
+    """Missing credentials are reported without connecting or pretending the inbox is empty."""
     cfg = _base_config(tmp_path, provider="imap", eml_dir="", mbox_path="")
     cfg.sources.scholar_alerts.email.imap_host = "imap.gmail.com"
     cfg.sources.scholar_alerts.email.imap_user = "user@example.com"
@@ -349,9 +350,8 @@ def test_fetch_imap_missing_env_password_returns_empty(tmp_path: Path) -> None:
             side_effect=AssertionError("should not connect without password"),
         ),
     ):
-        result = scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
-
-    assert result == []
+        with pytest.raises(RuntimeError, match="credentials are incomplete"):
+            scholar_alerts_source.fetch(now, lookback_days=10, config=cfg)
 
 
 def test_scholar_arxiv_enrichment_uses_full_abstract_when_fetch_returns_paper(tmp_path: Path) -> None:

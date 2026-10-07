@@ -11,6 +11,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 from paper_agent.core.models import Paper
 from paper_agent.core.utils import safe_paper_id_for_path
@@ -64,6 +65,7 @@ def write_local_note(
     brief_one_liner: Optional[str] = None,
     research_summary: Optional[tuple[str, str]] = None,
     source: str | None = None,
+    paper_dir: str | Path | None = None,
 ) -> Path:
     """
     Write one markdown note to library_dir/YYYY-MM-DD/{arxiv_id}.md.
@@ -132,6 +134,8 @@ def write_local_note(
         why=why,
         research_summary=research_summary,
     )
+    if paper_dir is not None:
+        metadata["note_path"] = Path(os.path.relpath(path, paper_dir)).as_posix()
     metadata_path.write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -650,6 +654,8 @@ def write_daily_digest(
     scholar_inbox: list[RankedPaper],
     paper_dir: str | Path,
     run_date: date,
+    *,
+    library_dir: str | Path | None = None,
 ) -> Path:
     """
     Write daily digest to paper_dir/YYYY-MM-DD.md (single file per day).
@@ -659,6 +665,29 @@ def write_daily_digest(
     """
     Path(paper_dir).mkdir(parents=True, exist_ok=True)
     path = Path(paper_dir) / f"{run_date.isoformat()}.md"
+    library = Path(library_dir) if library_dir is not None else Path(paper_dir) / "library"
+
+    # Rebuild from all notes for this day so a later run cannot erase earlier entries.
+    discovery_by_id = {item.paper.id: item for item in discovery}
+    scholar_by_id = {item.paper.id: item for item in scholar_inbox}
+    for metadata_path in sorted((library / run_date.isoformat()).glob("*.json")):
+        data = _read_metadata(metadata_path)
+        if not data or not isinstance(data.get("id"), str) or not isinstance(data.get("title"), str):
+            continue
+        target = scholar_by_id if data.get("source") == "scholar_alerts" else discovery_by_id
+        if data["id"] in target:
+            continue
+        target[data["id"]] = RankedPaper(
+            paper=Paper(
+                id=data["id"], title=data["title"], summary=str(data.get("abstract") or ""),
+                authors=_normalized_list(data.get("authors")), categories=_normalized_list(data.get("categories")),
+                updated=str(data.get("published") or run_date.isoformat()), link_abs=str(data.get("link") or ""),
+                link_pdf=None,
+            ),
+            why_this_paper=str(data.get("why_this_paper") or "—"),
+        )
+    discovery = list(discovery_by_id.values())
+    scholar_inbox = list(scholar_by_id.values())
 
     total = len(discovery) + len(scholar_inbox)
     lines: list[str] = [
@@ -678,7 +707,7 @@ def write_daily_digest(
         p = r.paper
         note_name = safe_paper_id_for_path(p.id)
         note_label = f"{note_name}.md"
-        note_href = f"../library/{run_date.isoformat()}/{note_name}.md"
+        note_href = quote(Path(os.path.relpath(library / run_date.isoformat() / note_label, path.parent)).as_posix())
         why = r.why_this_paper or "—"
         lines.append(f"### {p.title}")
         lines.append("")
@@ -698,7 +727,7 @@ def write_daily_digest(
         p = r.paper
         note_name = safe_paper_id_for_path(p.id)
         note_label = f"{note_name}.md"
-        note_href = f"../library/{run_date.isoformat()}/{note_name}.md"
+        note_href = quote(Path(os.path.relpath(library / run_date.isoformat() / note_label, path.parent)).as_posix())
         lines.append(f"### {p.title}")
         lines.append("")
         lines.append(f"- **Link**: {p.link_abs}")
