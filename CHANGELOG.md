@@ -12,6 +12,7 @@ All notable changes to the Paper Agent core (pipeline, CLI, config) are document
 - Record Scholar papers as seen after successful local output; deduplicate alerts before applying the run limit.
 - Report email login failures, bound IMAP connection time, and atomically replace seen-state files.
 - Check the Python version during bootstrap and cover runner success, failure, and active-lock handling in offline tests.
+- Read full process command lines when validating runner locks, including long installation paths.
 
 ## [0.4.0] - 2026-03-16
 

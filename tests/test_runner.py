@@ -1,7 +1,6 @@
 """Run the real macOS shell runner against an isolated fake Python executable."""
 
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -35,7 +34,8 @@ def test_runner_records_exit_status_and_releases_lock(tmp_path: Path, exit_code:
 def test_active_lock_prevents_a_second_pipeline(tmp_path: Path):
     executable = tmp_path / "fake-python"
     marker = tmp_path / "started"
-    executable.write_text(f'#!/bin/sh\ntouch "{marker}"\nsleep 1\nexit 0\n')
+    release = tmp_path / "release"
+    executable.write_text(f'#!/bin/sh\ntouch "{marker}"\nwhile [ ! -f "{release}" ]; do sleep 0.1; done\nexit 0\n')
     executable.chmod(0o700)
     args = [shutil.which("zsh"), str(RUNNER), "--agent-root", str(tmp_path), "--python", str(executable),
             "--config", str(tmp_path / "config.yaml"), "--state-dir", str(tmp_path / "state"), "--log-dir", str(tmp_path / "logs")]
@@ -49,9 +49,11 @@ def test_active_lock_prevents_a_second_pipeline(tmp_path: Path):
         second = subprocess.run(args, capture_output=True, text=True, timeout=5)
         assert second.returncode == 0
         assert "another Paper Agent process is active" in second.stdout
+        release.touch()
         first.communicate(timeout=5)
         assert first.returncode == 0
     finally:
+        release.touch()
         if first.poll() is None:
             first.terminate()
             first.communicate(timeout=5)
