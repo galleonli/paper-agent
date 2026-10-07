@@ -47,7 +47,7 @@ def test_quota_semantics(tmp_path: Path) -> None:
     def fake_fetch_arxiv(*args, **kwargs):
         return discovery_papers
 
-    def fake_fetch_scholar(now, lookback_days, config):
+    def fake_fetch_scholar(now, lookback_days, config, *, persist_seen=True):
         return scholar_papers
 
     with (
@@ -116,12 +116,11 @@ def test_scholar_bypass_constraints(tmp_path: Path) -> None:
 
 def test_seen_merge_preserves_scholar_ids_after_pipeline_save(tmp_path: Path) -> None:
     """
-    Scholar source writes seen IDs first; pipeline.save_seen must preserve them
-    when persisting discovery seen cache.
+    Pipeline persistence includes both sources after output succeeds.
     """
     config_path = _config_with_scholar(tmp_path)
 
-    # Use real scholar source with fixture email so scholar IDs are persisted by source.fetch().
+    # Use the real Scholar parser and state handling with fixture email.
     fixture_eml = Path(__file__).parent / "fixtures" / "sample_scholar_alert.eml"
     eml_dir = tmp_path / "eml"
     eml_dir.mkdir(parents=True, exist_ok=True)
@@ -222,4 +221,3 @@ def test_research_summary_is_discovery_only_not_scholar(tmp_path: Path) -> None:
     assert len(result) == 2
     assert summary_mock.call_count == 1
     assert summary_mock.call_args.args[0].id == "disc-summary-1"
-

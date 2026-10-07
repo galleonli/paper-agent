@@ -364,18 +364,20 @@ def _fetch_imap_gmail(config: Config) -> list[tuple[bytes, float | None]]:
     pw_env = (email_cfg.imap_password_env or "").strip()
     password = os.getenv(pw_env) if pw_env else None
     if not host or not user or not password:
-        return []
+        raise RuntimeError("Scholar email credentials are incomplete. Check the IMAP host, user, and password environment variable.")
 
     messages: list[tuple[bytes, float | None]] = []
     conn: imaplib.IMAP4_SSL | None = None
     try:
-        conn = imaplib.IMAP4_SSL(host)
+        conn = imaplib.IMAP4_SSL(host, timeout=config.advanced.request_timeout_seconds)
         conn.login(user, password)
         if not _imap_select_mailbox(conn, provider, email_cfg.gmail_label):
-            return []
+            raise RuntimeError("Scholar email mailbox could not be opened. Check the configured label or mailbox.")
 
         status, search_data = conn.search(None, "ALL")
-        if status != "OK" or not search_data or not search_data[0]:
+        if status != "OK":
+            raise RuntimeError("Scholar email search failed. Check the configured mailbox and try again.")
+        if not search_data or not search_data[0]:
             return []
         msg_ids = [x for x in search_data[0].split() if x]
 
@@ -398,7 +400,7 @@ def _fetch_imap_gmail(config: Config) -> list[tuple[bytes, float | None]]:
             if len(messages) >= limit:
                 break
     except (imaplib.IMAP4.error, OSError):
-        return []
+        raise RuntimeError("Scholar email connection or login failed. Check your credentials and network connection.") from None
     finally:
         if conn is not None:
             try:
@@ -484,10 +486,10 @@ def _fetch_title_abstract_from_url(
     return (title, abstract)
 
 
-def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
+def fetch(now: datetime, lookback_days: int, config: Config, *, persist_seen: bool = True) -> list[Paper]:
     """
     Fetch papers from Scholar Alerts email (mbox or eml_dir).
-    Returns only unseen papers; updates shared state/seen.json with scholar:<paper_id>.
+    Return unseen papers. The pipeline defers seen-state persistence until output succeeds.
     """
     if not getattr(config.sources.scholar_alerts, "enabled", False):
         return []
@@ -509,7 +511,19 @@ def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
     raw_items = _apply_light_filter(raw_items, sa.light_filter)
     # Order by received desc (newest first); within same ts preserve list order
     raw_items.sort(key=lambda it: it.received_ts or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    raw_items = raw_items[: sa.max_items_per_run]
+    # Previously seen and duplicate alerts must not consume the per-run limit.
+    seen_cache = load_seen(config.delivery.state_dir)
+    selected_items = []
+    selected_ids: set[str] = set()
+    for item in raw_items:
+        paper_id = _namespaced_id(_stable_paper_id(item.link))
+        if paper_id in seen_cache or paper_id in selected_ids:
+            continue
+        selected_items.append(item)
+        selected_ids.add(paper_id)
+        if len(selected_items) >= sa.max_items_per_run:
+            break
+    raw_items = selected_items
 
     # Build Papers with namespaced IDs; enrich from arXiv or generic fetch when possible; never crash
     papers: list[Paper] = []
@@ -571,7 +585,8 @@ def fetch(now: datetime, lookback_days: int, config: Config) -> list[Paper]:
         return []
     unseen_set = set(unseen_ids)
     result = [p for p in papers if p.id in unseen_set]
-    save_seen(state_dir, seen_cache)
+    if persist_seen:
+        save_seen(state_dir, seen_cache)
     return result
 
 

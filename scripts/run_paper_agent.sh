@@ -151,7 +151,7 @@ is_active_lock_pid() {
   fi
 
   local lock_cmd=""
-  lock_cmd="$(ps -o command= -p "$lock_pid" 2>/dev/null)"
+  lock_cmd="$(ps -ww -o command= -p "$lock_pid" 2>/dev/null)"
   if [[ "$lock_cmd" == *"run_paper_agent.sh"* ]]; then
     return 0
   fi

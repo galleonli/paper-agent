@@ -4,6 +4,7 @@ Pipeline orchestration: load config -> fetch -> lookback -> filter/rank -> state
 Catch-up safe and idempotent: seen state is persisted after local output.
 """
 
+from datetime import date
 from pathlib import Path
 
 from paper_agent.core.config import Config, load_config
@@ -72,6 +73,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             now=now,
             lookback_days=direction.lookback_days,
             config=config,
+            persist_seen=False,
         )
 
     # Lookback filter: keep only papers updated within last lookback_days (system local)
@@ -166,7 +168,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
     exploration_picks = sum(1 for s in selected_scored if getattr(s, "exploration_pick", False))
 
     # State: only process unseen (discovery feed)
-    paper_ids = [r.paper.id for r in ranked_all]
+    paper_ids = [r.paper.id for r in ranked_all] + [paper.id for paper in scholar_new]
     unseen_ids, seen_cache = filter_unseen(delivery.state_dir, paper_ids)
     if not unseen_ids and not scholar_new:
         log.info(
@@ -237,6 +239,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             brief_one_liner=None,
             research_summary=research_summary,
             source="arxiv",
+            paper_dir=delivery.paper_dir,
         )
         discovery_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
         new_metadata_paths.append(note_path.with_suffix(".json"))
@@ -258,6 +261,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
             brief_one_liner=None,
             research_summary=None,
             source="scholar_alerts",
+            paper_dir=delivery.paper_dir,
         )
         scholar_note_paths.append(str(note_path.relative_to(delivery.library_dir)))
         new_metadata_paths.append(note_path.with_suffix(".json"))
@@ -270,6 +274,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         scholar_ranked,
         delivery.paper_dir,
         run_date,
+        library_dir=delivery.library_dir,
     )
     weekly_digest_path = write_weekly_digest(
         delivery.library_dir,
@@ -277,7 +282,7 @@ def run(config_path: str | Path) -> list[RankedPaper]:
         run_date,
     )
 
-    # Persist seen after local output for discovery feed (Scholar Inbox already persisted in source).
+    # Persist both sources only after all local output has succeeded.
     save_seen(delivery.state_dir, seen_cache)
 
     if autotune_controller and autotune_params:

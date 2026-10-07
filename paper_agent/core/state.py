@@ -5,6 +5,8 @@ All timestamps use system local time.
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from paper_agent.core.dates import get_now
@@ -51,6 +53,8 @@ def load_seen(state_dir: str | Path) -> set[str]:
             data = json.load(f)
     except (json.JSONDecodeError, OSError):
         return set()
+    if not isinstance(data, dict):
+        return set()
     ids = data.get("seen_ids", [])
     if not isinstance(ids, list):
         return set()
@@ -68,8 +72,15 @@ def save_seen(state_dir: str | Path, seen_ids: set[str]) -> None:
         "seen_ids": sorted(seen_ids),
         "last_run": get_now().isoformat(),
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as f:
+            temporary = Path(f.name)
+            json.dump(data, f, indent=2)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def is_seen(state_dir: str | Path, paper_id: str, seen_cache: set[str] | None = None) -> bool:

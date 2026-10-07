@@ -78,7 +78,7 @@ def _detect_language_label(lang: str) -> tuple[str, str]:
     """
     v = (lang or "").lower()
     if v.startswith("zh"):
-        return "Chinese", "研究视角总结"
+        return "Chinese", "\u7814\u7a76\u89c6\u89d2\u603b\u7ed3"
     if v.startswith("ja"):
         return "Japanese", "Research-focused summary"
     if v.startswith("de"):
@@ -208,4 +208,3 @@ def build_research_summary(paper: Paper, why: str | None, config: Config) -> Opt
 
 
 __all__ = ["build_research_summary"]
-

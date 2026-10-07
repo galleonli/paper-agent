@@ -13,6 +13,11 @@ if [[ ! -f "config.example.yaml" ]] || [[ ! -f "requirements.txt" ]]; then
   exit 1
 fi
 
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "Error: Paper Agent requires Python 3.11 or later. Install it and make sure python3 points to that version." >&2
+  exit 1
+fi
+
 echo "Creating virtual environment at .venv ..."
 python3 -m venv .venv
 

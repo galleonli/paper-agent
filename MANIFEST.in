@@ -1,0 +1,7 @@
+include config.example.yaml
+include requirements-dev.txt
+include CHANGELOG.md
+include scripts/bootstrap.sh
+include scripts/run_paper_agent.sh
+include docs/usage.md
+recursive-include tests *.py *.eml *.mbox *.xml

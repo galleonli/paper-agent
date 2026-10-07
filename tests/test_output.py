@@ -80,9 +80,9 @@ def test_write_daily_digest(tmp_path: Path) -> None:
     assert "First" in text
     assert "Second" in text
     assert "Third" in text
-    assert "../library/2024-01-15/1.md" in text
-    assert "../library/2024-01-15/2.md" in text
-    assert "../library/2024-01-15/3.md" in text
+    assert "(library/2024-01-15/1.md)" in text
+    assert "(library/2024-01-15/2.md)" in text
+    assert "(library/2024-01-15/3.md)" in text
     # Section order: Daily Precision first, then Scholar Inbox.
     assert text.index("## Daily Precision") < text.index("## Scholar Inbox")
     assert "Total papers:" in text or "Daily Precision:" in text or "Scholar Inbox:" in text
@@ -99,7 +99,7 @@ def test_digest_two_sections_format(tmp_path: Path) -> None:
     assert "Papers: 1" in text  # under each section
     assert "### Discovery A" in text
     assert "### Scholar B" in text
-    assert "../library/2025-01-01/" in text
+    assert "(library/2025-01-01/" in text
 
 
 def test_write_weekly_digest_aggregates_full_week(tmp_path: Path) -> None:
