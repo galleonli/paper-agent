@@ -39,6 +39,17 @@ Edit `config.yaml` to set your research interests and output directory. Use [con
 
 Inspect the generated library and digest in your configured output directory.
 
+## Update an existing installation
+
+From your Paper Agent checkout:
+
+```sh
+git pull --ff-only
+./scripts/bootstrap.sh
+```
+
+Bootstrap updates the installed core and CLI using your existing Python environment. It preserves `config.yaml`, credentials, logs, and state. If Git reports local changes or diverging history, resolve those before updating; do not reset your checkout to discard them.
+
 ## Use Raycast
 
 Install the Paper Agent extension from the Raycast Store, then follow the [extension setup guide](https://github.com/galleonli/paper-agent-raycast#readme) to configure the core, configuration file, and paper directory. Open **Today's Papers** after a successful pipeline run.

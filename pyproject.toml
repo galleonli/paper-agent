@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paper-agent"
-version = "0.4.1"
+version = "0.4.2"
 description = "A local paper discovery and reading workflow with a Raycast companion"
 readme = "README.md"
 requires-python = ">=3.11"
