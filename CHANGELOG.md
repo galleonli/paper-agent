@@ -7,6 +7,7 @@ All notable changes to the Paper Agent core (pipeline, CLI, config) are document
 - Install and update the packaged core and CLI during bootstrap, reusing an existing supported Python environment and preserving local configuration.
 - Refresh dependencies within supported major versions during installation and updates.
 - Update bundled pip and setuptools before installation to avoid retaining known installer vulnerabilities.
+- Require certifi 2026.10.19 or later to remove the affected emSign trust root, and audit runtime dependencies before publishing packages.
 - Verify bootstrap installation and configuration preservation in CI.
 - Publish wheel and source archives with SHA-256 checksums from tested release tags on the main branch.
 
