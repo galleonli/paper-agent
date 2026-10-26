@@ -2,7 +2,7 @@
 
 All notable changes to the Paper Agent core (pipeline, CLI, config) are documented here.
 
-## [0.4.2] - 2026-10-17
+## [0.4.2] - 2026-10-26
 
 - Install and update the packaged core and CLI during bootstrap, reusing an existing supported Python environment and preserving local configuration.
 - Refresh dependencies within supported major versions during installation and updates.
