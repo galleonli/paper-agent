@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Bootstrap Paper Agent: create venv, install deps, copy config.
+# Install or update Paper Agent while preserving local configuration.
 # Run from the repository root: ./scripts/bootstrap.sh
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -13,16 +13,30 @@ if [[ ! -f "config.example.yaml" ]] || [[ ! -f "requirements.txt" ]]; then
   exit 1
 fi
 
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
-  echo "Error: Paper Agent requires Python 3.11 or later. Install it and make sure python3 points to that version." >&2
+PYTHON_BIN="python3"
+if [[ -x ".venv/bin/python" ]]; then
+  PYTHON_BIN=".venv/bin/python"
+fi
+
+if ! "$PYTHON_BIN" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "Error: Paper Agent requires Python 3.11 or later. Check $PYTHON_BIN before installing." >&2
   exit 1
 fi
 
-echo "Creating virtual environment at .venv ..."
-python3 -m venv .venv
+if [[ "$PYTHON_BIN" == "python3" ]]; then
+  echo "Creating virtual environment at .venv ..."
+  python3 -m venv .venv
+else
+  echo "Using the existing virtual environment at .venv ..."
+fi
 
-echo "Installing dependencies ..."
-.venv/bin/pip install -q -r requirements.txt
+echo "Installing Paper Agent and its dependencies ..."
+if ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
+  .venv/bin/python -m ensurepip --upgrade
+fi
+.venv/bin/python -m pip install -q --upgrade pip setuptools
+.venv/bin/python -m pip install -q --upgrade --upgrade-strategy eager .
+.venv/bin/paper-agent --help >/dev/null
 
 if [[ ! -f "config.yaml" ]]; then
   cp config.example.yaml config.yaml
@@ -31,7 +45,7 @@ else
   echo "config.yaml already exists; leaving it unchanged."
 fi
 
-mkdir -p logs state 2>/dev/null || true
+mkdir -p logs state
 
 echo ""
 echo "Done. Next steps:"
