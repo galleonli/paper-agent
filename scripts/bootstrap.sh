@@ -13,8 +13,8 @@ if [[ ! -f "config.example.yaml" ]] || [[ ! -f "requirements.txt" ]]; then
   exit 1
 fi
 
-PYTHON_BIN="python3"
-if [[ -x ".venv/bin/python" ]]; then
+PYTHON_BIN="${PAPER_AGENT_PYTHON:-python3}"
+if [[ -x ".venv/bin/python" ]] && .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
   PYTHON_BIN=".venv/bin/python"
 fi
 
@@ -23,9 +23,14 @@ if ! "$PYTHON_BIN" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) els
   exit 1
 fi
 
-if [[ "$PYTHON_BIN" == "python3" ]]; then
+if [[ "$PYTHON_BIN" != ".venv/bin/python" ]]; then
+  if [[ -e ".venv" || -L ".venv" ]]; then
+    BACKUP_DIR="$(mktemp -d "$REPO_ROOT/.venv-backup.XXXXXX")"
+    mv .venv "$BACKUP_DIR/environment"
+    echo "Preserved the unusable environment at $BACKUP_DIR/environment"
+  fi
   echo "Creating virtual environment at .venv ..."
-  python3 -m venv .venv
+  "$PYTHON_BIN" -m venv .venv
 else
   echo "Using the existing virtual environment at .venv ..."
 fi

@@ -2,6 +2,12 @@
 
 All notable changes to the Paper Agent core (pipeline, CLI, config) are documented here.
 
+## [0.4.3] - 2026-11-21
+
+- Recover virtual environments whose Python executable disappeared after a system update, preserving the old environment before replacement.
+- Accept `PAPER_AGENT_PYTHON` when creating an environment with a chosen Python installation.
+- Document setup checks and configuration precedence for Raycast users.
+
 ## [0.4.2] - 2026-10-26
 
 - Install and update the packaged core and CLI during bootstrap, reusing an existing supported Python environment and preserving local configuration.
