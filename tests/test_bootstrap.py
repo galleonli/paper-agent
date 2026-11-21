@@ -55,7 +55,7 @@ def test_recover_missing_interpreter_without_touching_config_or_old_files(instal
     assert result.returncode == 0, result.stderr
     assert (root / ".venv/bin/python").is_file()
     assert (root / "config.yaml").read_text() == "private: preserved\n"
-    backups = list(root.glob(".venv-backup.*/environment"))
+    backups = [directory / "environment" for directory in root.glob(".venv-backup.*")]
     assert len(backups) == 1
     if layout == "dangling-link":
         assert backups[0].is_symlink()
