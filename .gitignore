@@ -161,6 +161,7 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv-backup.*/
 env/
 venv/
 ENV/

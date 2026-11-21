@@ -50,9 +50,11 @@ git pull --ff-only
 
 Bootstrap updates the installed core and CLI using your existing Python environment. It preserves `config.yaml`, credentials, logs, and state. If Git reports local changes or diverging history, resolve those before updating; do not reset your checkout to discard them.
 
+If a Python update breaks the environment, rerun `./scripts/bootstrap.sh`. It preserves the unusable environment under `.venv-backup.*` and creates a replacement. To choose the interpreter for a new or broken environment, use `PAPER_AGENT_PYTHON=/absolute/path/to/python3 ./scripts/bootstrap.sh`.
+
 ## Use Raycast
 
-Install the Paper Agent extension from the Raycast Store, then follow the [extension setup guide](https://github.com/galleonli/paper-agent-raycast#readme) to configure the core, configuration file, and paper directory. Open **Today's Papers** after a successful pipeline run.
+Install the Paper Agent extension from the Raycast Store, then open **Check Setup**. Set **Config File Path** to your `config.yaml`; the extension can read your paper and library directories from that file. Set **Paper Directory** in Raycast only to override those paths. The setup screen checks the core and shows which settings come from Raycast and which come from YAML. See the [extension setup guide](https://github.com/galleonli/paper-agent-raycast#readme) for details.
 
 Use **Check Run Status** to diagnose execution problems. Add the daily schedule only after the manual workflow works. A sleeping or unavailable machine can delay scheduled work.
 
